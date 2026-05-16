@@ -325,6 +325,19 @@
   .empty-state .big { font-size: 2.5rem; margin-bottom: 10px; }
   .empty-state p { font-size: 0.8rem; }
 
+
+  /* RATION RECOMMENDATION BOX */
+  #ration-rec-content { animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+  #ration-rec-box .section-title { font-size: 0.8rem; font-weight: 700; }
+  
+  /* BATCH CALCULATOR */
+  #tab-batch .feed-table-wrap table th { font-size: 0.62rem; }
+  #batch-result .info-box { font-size: 0.75rem; line-height: 1.8; }
+  
+  /* QUICK PRESET BUTTONS */  
+  #tab-batch .btn-secondary { font-family: 'Noto Sans Bengali', sans-serif; }
+
   /* PRINT */
   @media print {
     body { background: white; color: black; }
@@ -476,6 +489,8 @@
     .feed-picker select { min-height: 240px; }
   }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -671,6 +686,7 @@
         <div class="tab" onclick="showTab('concentrate')">কনসেন্ট্রেট (Concentrate)</div>
         <div class="tab" onclick="showTab('custom')">কাস্টম উপাদান (Custom)</div>
         <div class="tab" onclick="showTab('summary')">রেশন সারসংক্ষেপ (Summary)</div>
+        <div class="tab" onclick="showTab('batch')" style="color:#7c3aed;border-bottom-color:transparent;" onmouseenter="this.style.color='#7c3aed'" >📦 ব্যাচ ক্যালকুলেটর</div>
       </div>
 
       <!-- ROUGHAGE TAB -->
@@ -759,11 +775,60 @@
         </div>
       </div>
 
+
+      <!-- BATCH CALCULATOR TAB -->
+      <div class="tab-content" id="tab-batch">
+        <p style="font-size:0.78rem;color:var(--text2);margin-bottom:14px;">
+          রেশনের যেকোনো পরিমাণের জন্য মোট খাদ্য ও পুষ্টিমান হিসাব করুন।
+          <span style="font-family:'IBM Plex Mono';font-size:0.65rem;"> | Bulk/Batch Ration Calculator</span>
+        </p>
+        <div class="form-grid" style="max-width:600px;">
+          <div class="form-group">
+            <label>প্রাণীর সংখ্যা <span class="label-en">No. of Animals</span></label>
+            <input type="number" id="batch_animals" value="1" min="1" max="10000" step="1">
+          </div>
+          <div class="form-group">
+            <label>দিনের সংখ্যা <span class="label-en">No. of Days</span></label>
+            <input type="number" id="batch_days" value="1" min="1" max="365" step="1">
+          </div>
+        </div>
+        <div style="margin:14px 0 10px;font-size:0.78rem;color:var(--text2);">অথবা সরাসরি মোট পরিমাণ দিন:</div>
+        <div class="form-grid" style="max-width:600px;">
+          <div class="form-group">
+            <label>মোট তাজা খাদ্য (কেজি) <span class="label-en">Total Fresh Feed (kg)</span></label>
+            <input type="number" id="batch_custom_kg" value="" min="0" step="1" placeholder="যেমন: 100, 500, 1000">
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end;">
+            <button class="btn btn-primary" style="width:100%;margin-bottom:0;" onclick="calcBatch()">
+              📦 ব্যাচ হিসাব করুন
+            </button>
+          </div>
+        </div>
+        <!-- Quick preset buttons -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;">
+          <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.75rem;" onclick="setBatchKg(100)">100 কেজি</button>
+          <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.75rem;" onclick="setBatchKg(500)">500 কেজি</button>
+          <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.75rem;" onclick="setBatchKg(1000)">১০০০ কেজি</button>
+          <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.75rem;" onclick="setBatchKg(5000)">৫০০০ কেজি</button>
+        </div>
+        <div id="batch-result"></div>
+      </div>
+
       <!-- SUMMARY TAB -->
       <div class="tab-content" id="tab-summary">
         <div id="summary-content">
           <div class="empty-state"><div class="big">📋</div><p>প্রথমে খাদ্য উপাদান যোগ করুন</p></div>
         </div>
+      </div>
+
+      
+      <!-- ===== NRC 2021 RATION RECOMMENDATION BOX ===== -->
+      <div id="ration-rec-box" style="display:none; margin-top:18px;">
+        <div class="section-title" style="background:linear-gradient(90deg,rgba(26,122,79,0.18) 0%,transparent 100%); border-left:4px solid #1a7a4f;">
+          🎯 NRC 2021 অনুযায়ী প্রস্তাবিত রেশন বিভাজন
+          <span style="margin-left:auto;font-size:0.65rem;color:var(--text2);">Suggested Roughage:Concentrate Split</span>
+        </div>
+        <div id="ration-rec-content"></div>
       </div>
 
       <div class="btn-group">
@@ -805,254 +870,285 @@
 // ======================================================
 const FEEDS = {
   roughage: [
-    {"id":"NRC16F2","bn":"Almond Hulls","en":"NRC16F2 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":88.2,"de":2.44,"nel":1.24,"cp":5.3,"ndf":33.0,"ca":0.27,"p":0.12},
-    {"id":"NRC16F3","bn":"Apple Pomace/ By-product, Wet","en":"NRC16F3 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":18.2,"de":2.29,"nel":1.15,"cp":6.4,"ndf":45.7,"ca":0.15,"p":0.14},
-    {"id":"NRC16F9","bn":"Barley Hay","en":"NRC16F9 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.4,"de":2.62,"nel":1.34,"cp":10.8,"ndf":54.5,"ca":0.38,"p":0.25},
-    {"id":"NRC16F11","bn":"Barley Silage. Headed","en":"NRC16F11 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":37.0,"de":2.86,"nel":1.47,"cp":10.9,"ndf":44.8,"ca":0.32,"p":0.29},
-    {"id":"NRC16F12","bn":"Barley Silage. Mid-Maturity","en":"NRC16F12 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":36.1,"de":2.62,"nel":1.34,"cp":11.4,"ndf":52.9,"ca":0.46,"p":0.31},
-    {"id":"NRC16F13","bn":"Barley Silage. Vegetative","en":"NRC16F13 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":33.0,"de":2.52,"nel":1.28,"cp":14.2,"ndf":56.6,"ca":0.53,"p":0.35},
-    {"id":"NRC16F14","bn":"Beet Pulp. Dry","en":"NRC16F14 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":92.3,"de":2.75,"nel":1.41,"cp":9.9,"ndf":46.9,"ca":0.77,"p":0.08},
-    {"id":"NRC16F17","bn":"Bermudagrass Hay","en":"NRC16F17 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":93.4,"de":2.4,"nel":1.21,"cp":11.0,"ndf":65.4,"ca":0.49,"p":0.19},
-    {"id":"NRC16F18","bn":"Bermudagrass Silage. Mature","en":"NRC16F18 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":45.3,"de":2.26,"nel":1.14,"cp":10.3,"ndf":70.8,"ca":0.47,"p":0.24},
-    {"id":"NRC16F19","bn":"Bermudagrass Silage. M id- M a t ur it y","en":"NRC16F19 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":38.4,"de":2.39,"nel":1.21,"cp":14.6,"ndf":64.1,"ca":0.51,"p":0.31},
-    {"id":"NRC16F33","bn":"Cool-Season Grass Hay. Mature","en":"NRC16F33 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.8,"de":2.34,"nel":1.18,"cp":9.2,"ndf":66.7,"ca":0.44,"p":0.21},
-    {"id":"NRC16F34","bn":"Cool-Season Grass Hay. Mid-Maturity","en":"NRC16F34 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":88.3,"de":2.53,"nel":1.29,"cp":13.3,"ndf":58.0,"ca":0.48,"p":0.28},
-    {"id":"NRC16F35","bn":"Cool-Season Grass Silage","en":"NRC16F35 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":38.8,"de":2.44,"nel":1.24,"cp":13.4,"ndf":62.1,"ca":0.55,"p":0.31},
-    {"id":"NRC16F37","bn":"Corn Cobs","en":"NRC16F37 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.8,"de":2.41,"nel":1.22,"cp":3.0,"ndf":83.8,"ca":0.04,"p":0.06},
-    {"id":"NRC16F48","bn":"Corn Silage. Typical","en":"NRC16F48 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":35.4,"de":2.93,"nel":1.51,"cp":7.7,"ndf":0.0,"ca":0.24,"p":0.23},
-    {"id":"NRC16F49","bn":"Corn Silage. Immature","en":"NRC16F49 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":31.3,"de":2.93,"nel":1.51,"cp":7.9,"ndf":42.6,"ca":0.24,"p":0.24},
-    {"id":"NRC16F50","bn":"Corn Silage, Mature","en":"NRC16F50 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":39.6,"de":2.88,"nel":1.48,"cp":7.5,"ndf":39.3,"ca":0.23,"p":0.23},
-    {"id":"NRC16F51","bn":"Corn Stalks. Ensiled. Low OM","en":"NRC16F51 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":41.2,"de":2.19,"nel":1.1,"cp":7.0,"ndf":0.0,"ca":0.48,"p":0.19},
-    {"id":"NRC16F52","bn":"Corn Stalks. Ensiled. High OM","en":"NRC16F52 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":85.0,"de":2.16,"nel":1.08,"cp":5.6,"ndf":0.0,"ca":0.39,"p":0.14},
-    {"id":"NRC16F53","bn":"Corn. Ear with Husk and Some Stalk, Ensiled. High Fiber","en":"NRC16F53 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":58.0,"de":3.26,"nel":1.69,"cp":7.9,"ndf":24.9,"ca":0.0,"p":0.26},
-    {"id":"NRC16F54","bn":"Corn. Ear with Husk and Some Stalk. Ensiled. Low Fiber","en":"NRC16F54 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":64.8,"de":3.36,"nel":1.75,"cp":7.8,"ndf":18.1,"ca":0.04,"p":0.28},
-    {"id":"NRC16F55","bn":"Cotton Gin Trash","en":"NRC16F55 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.3,"de":1.67,"nel":0.81,"cp":12.0,"ndf":0.0,"ca":0.0,"p":0.24},
-    {"id":"NRC16F56","bn":"Cottonseed Whole. Lime d","en":"NRC16F56 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.4,"de":3.15,"nel":1.63,"cp":23.3,"ndf":50.6,"ca":0.17,"p":0.62},
-    {"id":"NRC16F57","bn":"Cottonseed Hulls","en":"NRC16F57 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.0,"de":1.58,"nel":0.76,"cp":7.0,"ndf":80.9,"ca":0.23,"p":0.15},
-    {"id":"NRC16F80","bn":"Grain Sorghum Hay","en":"NRC16F80 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":92.6,"de":2.64,"nel":1.35,"cp":8.8,"ndf":48.1,"ca":0.28,"p":0.22},
-    {"id":"NRC16F81","bn":"Grain Sorghum Silage, Mature","en":"NRC16F81 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":31.3,"de":2.73,"nel":1.4,"cp":8.2,"ndf":45.7,"ca":0.28,"p":0.22},
-    {"id":"NRC16F82","bn":"Grain Sorghum Silage, Mid-Maturity","en":"NRC16F82 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":29.8,"de":2.52,"nel":1.28,"cp":8.9,"ndf":53.1,"ca":0.37,"p":0.23},
-    {"id":"NRC16F83","bn":"Grass-Legume Mixtures, Predominantly Grass. Silage","en":"NRC16F83 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":39.6,"de":2.55,"nel":1.3,"cp":14.3,"ndf":57.7,"ca":0.55,"p":0.3},
-    {"id":"NRC16F84","bn":"Grass-Legume M ixtures. Predominantly Grass, Hay. Mid-Maturity","en":"NRC16F84 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.2,"de":2.64,"nel":1.35,"cp":15.6,"ndf":54.7,"ca":0.63,"p":0.33},
-    {"id":"NRC16F85","bn":"Grass-Legume Mixtures, Predominantly Grass, Hay. Mature","en":"NRC16F85 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":87.4,"de":2.43,"nel":1.23,"cp":10.9,"ndf":62.0,"ca":0.51,"p":0.22},
-    {"id":"NRC16F86","bn":"Grass-Legume Mixtures, Predominantl y Legume, Hay, Mature","en":"NRC16F86 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":85.3,"de":2.4,"nel":1.21,"cp":17.4,"ndf":51.2,"ca":1.24,"p":0.27},
-    {"id":"NRC16F87","bn":"Grass- Legume Mixtures, Predominamly Legume, Hay, lmma1ure","en":"NRC16F87 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":88.6,"de":2.64,"nel":1.35,"cp":20.3,"ndf":43.9,"ca":1.28,"p":0.3},
-    {"id":"NRC16F88","bn":"Grass-Legume Mixtures, Predominantly Legume, Silage","en":"NRC16F88 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":41.0,"de":2.61,"nel":1.33,"cp":20.0,"ndf":45.9,"ca":1.26,"p":0.35},
-    {"id":"NRC16F89","bn":"Grass-Legume Mixtures, Mix, Hay","en":"NRC16F89 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":86.4,"de":2.38,"nel":1.2,"cp":12.1,"ndf":58.2,"ca":0.74,"p":0.25},
-    {"id":"NRC16F90","bn":"Grass-Legume Mixtures, Mix Silage","en":"NRC16F90 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":40.0,"de":2.6,"nel":1.33,"cp":17.7,"ndf":51.2,"ca":0.87,"p":0.34},
-    {"id":"NRC16F91","bn":"Legume Hay, Immature","en":"NRC16F91 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.0,"de":2.68,"nel":1.37,"cp":21.5,"ndf":37.7,"ca":1.51,"p":0.29},
-    {"id":"NRC16F92","bn":"Legume Hay. Mature","en":"NRC16F92 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.0,"de":2.46,"nel":1.25,"cp":18.1,"ndf":46.6,"ca":1.37,"p":0.28},
-    {"id":"NRC16F93","bn":"Legume Hay, Mid-Maturity","en":"NRC16F93 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.0,"de":2.63,"nel":1.34,"cp":20.7,"ndf":41.1,"ca":1.4,"p":0.28},
-    {"id":"NRC16F94","bn":"Legume Silage. Immature","en":"NRC16F94 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":35.0,"de":2.7,"nel":1.38,"cp":22.1,"ndf":38.7,"ca":1.3,"p":0.35},
-    {"id":"NRC16F95","bn":"Legume Silage. Mid-Ma turity","en":"NRC16F95 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":42.9,"de":2.59,"nel":1.32,"cp":20.5,"ndf":43.2,"ca":1.25,"p":0.35},
-    {"id":"NRC16F99","bn":"Millet Hay","en":"NRC16F99 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":87.5,"de":2.25,"nel":1.13,"cp":10.7,"ndf":61.9,"ca":0.54,"p":0.28},
-    {"id":"NRC16F100","bn":"Millet Silage","en":"NRC16F100 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":29.3,"de":2.25,"nel":1.13,"cp":13.0,"ndf":59.7,"ca":0.55,"p":0.33},
-    {"id":"NRC16F103","bn":"Oat Hay","en":"NRC16F103 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.5,"de":2.51,"nel":1.28,"cp":8.5,"ndf":59.0,"ca":0.32,"p":0.21},
-    {"id":"NRC16F104","bn":"Oat Hulls","en":"NRC16F104 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.4,"de":2.23,"nel":1.12,"cp":5.0,"ndf":73.6,"ca":0.16,"p":0.15},
-    {"id":"NRC16F105","bn":"Oat Silage, Immature","en":"NRC16F105 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":33.7,"de":2.58,"nel":1.31,"cp":18.5,"ndf":45.8,"ca":0.72,"p":0.4},
-    {"id":"NRC16F106","bn":"Oat Silage, Mid-Maturiry","en":"NRC16F106 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":35.8,"de":2.41,"nel":1.22,"cp":12.9,"ndf":57.4,"ca":0.51,"p":0.34},
-    {"id":"NRC16F107","bn":"Pea Hay","en":"NRC16F107 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.5,"de":2.66,"nel":1.36,"cp":15.9,"ndf":43.4,"ca":1.04,"p":0.28},
-    {"id":"NRC16F108","bn":"Pea Silage","en":"NRC16F108 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":31.7,"de":2.46,"nel":1.25,"cp":17.0,"ndf":52.5,"ca":0.88,"p":0.34},
-    {"id":"NRC16F109","bn":"Peanut Hay","en":"NRC16F109 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.3,"de":2.37,"nel":1.2,"cp":12.0,"ndf":45.8,"ca":1.34,"p":0.17},
-    {"id":"NRC16F110","bn":"Peanut Hulls","en":"NRC16F110 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":94.0,"de":1.57,"nel":0.75,"cp":8.9,"ndf":69.6,"ca":0.26,"p":0.09},
-    {"id":"NRC16F112","bn":"Peanut Skins","en":"NRC16F112 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":92.4,"de":2.74,"nel":1.4,"cp":16.2,"ndf":47.4,"ca":0.3,"p":0.16},
-    {"id":"NRC16F120","bn":"R ice H ulls","en":"NRC16F120 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.0,"de":1.17,"nel":0.53,"cp":3.7,"ndf":75.1,"ca":0.24,"p":0.12},
-    {"id":"NRC16F122","bn":"Rice Silage. Vegetative","en":"NRC16F122 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":42.9,"de":2.18,"nel":1.09,"cp":8.3,"ndf":61.5,"ca":9.0,"p":9.0},
-    {"id":"NRC16F125","bn":"Rye Annual Fresh. Mid-Maturity","en":"NRC16F125 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":19.5,"de":2.78,"nel":1.43,"cp":20.5,"ndf":49.1,"ca":0.51,"p":0.39},
-    {"id":"NRC16F126","bn":"Rye Annual Hay. Immature","en":"NRC16F126 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.0,"de":2.8,"nel":1.44,"cp":22.9,"ndf":47.0,"ca":0.59,"p":0.4},
-    {"id":"NRC16F127","bn":"Rye A nnual Hay. Mature","en":"NRC16F127 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":92.7,"de":2.36,"nel":1.19,"cp":7.6,"ndf":66.8,"ca":0.37,"p":0.18},
-    {"id":"NRC16F128","bn":"Rye Annual Silage, Immature","en":"NRC16F128 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":34.7,"de":2.64,"nel":1.35,"cp":16.4,"ndf":50.5,"ca":0.57,"p":0.42},
-    {"id":"NRC16F129","bn":"Rye Annual Silage. Mature","en":"NRC16F129 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":67.2,"de":2.32,"nel":1.17,"cp":8.3,"ndf":66.2,"ca":0.36,"p":0.25},
-    {"id":"NRC16F130","bn":"Rye Annual Silage. M i d- Ma1uri1y","en":"NRC16F130 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":34.9,"de":2.48,"nel":1.26,"cp":14.4,"ndf":58.0,"ca":0.48,"p":0.37},
-    {"id":"NRC16F131","bn":"Rye Annual H ay, Mid-Maturity","en":"NRC16F131 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.3,"de":2.5,"nel":1.27,"cp":12.0,"ndf":57.3,"ca":0.51,"p":0.28},
-    {"id":"NRC16F135","bn":"Sorghum Forage. Silage. Immature","en":"NRC16F135 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":29.2,"de":2.45,"nel":1.24,"cp":11.7,"ndf":56.7,"ca":0.43,"p":0.25},
-    {"id":"NRC16F136","bn":"Sorghum Forage, Silage, Mature","en":"NRC16F136 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":28.7,"de":2.38,"nel":1.2,"cp":11.3,"ndf":61.6,"ca":0.49,"p":0.29},
-    {"id":"NRC16F138","bn":"Sorghum Hay","en":"NRC16F138 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.4,"de":2.39,"nel":1.21,"cp":10.2,"ndf":63.0,"ca":0.39,"p":0.22},
-    {"id":"NRC16F139","bn":"Sorghum Soybean Silage","en":"NRC16F139 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":32.3,"de":2.48,"nel":1.26,"cp":11.7,"ndf":54.4,"ca":0.62,"p":0.27},
-    {"id":"NRC16F140","bn":"Sorghum-Sudangrass Silage","en":"NRC16F140 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":31.7,"de":2.31,"nel":1.16,"cp":12.3,"ndf":59.5,"ca":0.52,"p":0.3},
-    {"id":"NRC16F142","bn":"Sorghum-Sudangrass Hay","en":"NRC16F142 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.5,"de":2.34,"nel":1.18,"cp":9.8,"ndf":61.0,"ca":0.37,"p":0.24},
-    {"id":"NRC16F143","bn":"Soybean Hay","en":"NRC16F143 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.6,"de":2.68,"nel":1.37,"cp":20.1,"ndf":40.3,"ca":1.41,"p":0.28},
-    {"id":"NRC16F144","bn":"Soybean Hulls","en":"NRC16F144 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.4,"de":2.7,"nel":1.38,"cp":11.9,"ndf":66.7,"ca":0.64,"p":0.13},
-    {"id":"NRC16F147","bn":"Soybean Silage","en":"NRC16F147 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":37.5,"de":2.56,"nel":1.3,"cp":18.0,"ndf":45.3,"ca":1.33,"p":0.32},
-    {"id":"NRC16F151","bn":"Sudangras.~ Hay. Mature","en":"NRC16F151 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":93.1,"de":2.29,"nel":1.15,"cp":8.1,"ndf":65.8,"ca":0.45,"p":0.21},
-    {"id":"NRC16F152","bn":"Sudangrass Hay, M i d- Maturity","en":"NRC16F152 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":83.1,"de":2.18,"nel":1.09,"cp":14.7,"ndf":54.6,"ca":1.25,"p":0.35},
-    {"id":"NRC16F153","bn":"Sudangrass Silage. Mature","en":"NRC16F153 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":31.5,"de":2.16,"nel":1.08,"cp":9.5,"ndf":66.6,"ca":0.45,"p":0.27},
-    {"id":"NRC16F154","bn":"Sudangrass Silage, Mid-Maturity","en":"NRC16F154 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":31.5,"de":2.27,"nel":1.14,"cp":13.4,"ndf":60.7,"ca":0.52,"p":0.32},
-    {"id":"NRC16F155","bn":"Sugarcane Bagasse Hay","en":"NRC16F155 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":93.2,"de":1.55,"nel":0.74,"cp":3.9,"ndf":76.9,"ca":0.34,"p":0.05},
-    {"id":"NRC16F156","bn":"Sugarcane Bagasse Silage","en":"NRC16F156 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":34.6,"de":1.83,"nel":0.9,"cp":5.0,"ndf":72.0,"ca":0.25,"p":0.07},
-    {"id":"NRC16F159","bn":"Sunflower Silage","en":"NRC16F159 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":21.6,"de":2.42,"nel":1.23,"cp":13.3,"ndf":45.3,"ca":1.12,"p":0.38},
-    {"id":"NRC16F160","bn":"Sweet Corn Cannery Waste","en":"NRC16F160 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":22.5,"de":2.82,"nel":1.45,"cp":9.8,"ndf":56.3,"ca":0.24,"p":0.27},
-    {"id":"NRC16F162","bn":"Tomato Pomace","en":"NRC16F162 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":24.7,"de":2.63,"nel":1.34,"cp":19.3,"ndf":60.0,"ca":0.22,"p":0.47},
-    {"id":"NRC16F164","bn":"Triticale Hay","en":"NRC16F164 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.0,"de":2.48,"nel":1.26,"cp":10.3,"ndf":60.0,"ca":0.33,"p":0.24},
-    {"id":"NRC16F165","bn":"Triticale Plus Pea Silage","en":"NRC16F165 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":34.2,"de":2.5,"nel":1.27,"cp":16.0,"ndf":55.7,"ca":0.68,"p":0.35},
-    {"id":"NRC16F166","bn":"Triticale Silage, Mature","en":"NRC16F166 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":30.1,"de":2.55,"nel":1.3,"cp":14.2,"ndf":58.6,"ca":0.38,"p":0.34},
-    {"id":"NRC16F167","bn":"Triticale Silage. Mid-Maturity","en":"NRC16F167 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":33.3,"de":2.56,"nel":1.3,"cp":17.8,"ndf":52.2,"ca":0.52,"p":0.41},
-    {"id":"NRC16F171","bn":"Wheat Hay, Headed","en":"NRC16F171 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.6,"de":2.52,"nel":1.28,"cp":9.9,"ndf":52.8,"ca":0.31,"p":0.23},
-    {"id":"NRC16F172","bn":"Wheat Hay, Vegetative","en":"NRC16F172 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.5,"de":2.48,"nel":1.26,"cp":10.5,"ndf":58.0,"ca":0.29,"p":0.21},
-    {"id":"NRC16F174","bn":"Wheat Silage, Headed","en":"NRC16F174 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":34.8,"de":2.51,"nel":1.28,"cp":10.7,"ndf":51.1,"ca":0.3,"p":0.29},
-    {"id":"NRC16F175","bn":"Wheat Silage, Vegetative","en":"NRC16F175 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":35.6,"de":2.53,"nel":1.29,"cp":13.4,"ndf":56.6,"ca":0.43,"p":0.32},
-    {"id":"NRC16F176","bn":"Wheat Straw","en":"NRC16F176 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.5,"de":1.96,"nel":0.97,"cp":4.5,"ndf":76.9,"ca":0.38,"p":0.12}
+    {"id":"NRC16F2","bn":"আলমন্ড খোসা (Almond Hulls)","en":"NRC16F2 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":88.2,"de":2.44,"nel":1.24,"cp":5.3,"ndf":33.0,"ca":0.27,"p":0.12},
+    {"id":"NRC16F3","bn":"আপেল পোমাস, ভেজা (Apple Pomace, Wet)","en":"NRC16F3 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":18.2,"de":2.29,"nel":1.15,"cp":6.4,"ndf":45.7,"ca":0.15,"p":0.14},
+    {"id":"NRC16F9","bn":"যবের খড় (Barley Hay)","en":"NRC16F9 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.4,"de":2.62,"nel":1.34,"cp":10.8,"ndf":54.5,"ca":0.38,"p":0.25},
+    {"id":"NRC16F11","bn":"যব সাইলেজ, শীষসহ (Barley Silage, Headed)","en":"NRC16F11 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":37.0,"de":2.86,"nel":1.47,"cp":10.9,"ndf":44.8,"ca":0.32,"p":0.29},
+    {"id":"NRC16F12","bn":"যব সাইলেজ, মধ্যপরিপক্ক (Barley Silage)","en":"NRC16F12 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":36.1,"de":2.62,"nel":1.34,"cp":11.4,"ndf":52.9,"ca":0.46,"p":0.31},
+    {"id":"NRC16F13","bn":"যব সাইলেজ, সবুজ (Barley Silage, Vegetative)","en":"NRC16F13 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":33.0,"de":2.52,"nel":1.28,"cp":14.2,"ndf":56.6,"ca":0.53,"p":0.35},
+    {"id":"NRC16F14","bn":"বিট পাল্প, শুকনো (Beet Pulp, Dry)","en":"NRC16F14 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":92.3,"de":2.75,"nel":1.41,"cp":9.9,"ndf":46.9,"ca":0.77,"p":0.08},
+    {"id":"NRC16F17","bn":"বারমুডা ঘাস খড় (Bermudagrass Hay)","en":"NRC16F17 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":93.4,"de":2.4,"nel":1.21,"cp":11.0,"ndf":65.4,"ca":0.49,"p":0.19},
+    {"id":"NRC16F18","bn":"বারমুডা ঘাস সাইলেজ, পরিপক্ক","en":"NRC16F18 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":45.3,"de":2.26,"nel":1.14,"cp":10.3,"ndf":70.8,"ca":0.47,"p":0.24},
+    {"id":"NRC16F19","bn":"বারমুডা ঘাস সাইলেজ, মধ্যপরিপক্ক","en":"NRC16F19 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":38.4,"de":2.39,"nel":1.21,"cp":14.6,"ndf":64.1,"ca":0.51,"p":0.31},
+    {"id":"NRC16F33","bn":"শীতকালীন ঘাস খড়, পরিপক্ক","en":"NRC16F33 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.8,"de":2.34,"nel":1.18,"cp":9.2,"ndf":66.7,"ca":0.44,"p":0.21},
+    {"id":"NRC16F34","bn":"শীতকালীন ঘাস খড়, মধ্যপরিপক্ক","en":"NRC16F34 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":88.3,"de":2.53,"nel":1.29,"cp":13.3,"ndf":58.0,"ca":0.48,"p":0.28},
+    {"id":"NRC16F35","bn":"শীতকালীন ঘাস সাইলেজ","en":"NRC16F35 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":38.8,"de":2.44,"nel":1.24,"cp":13.4,"ndf":62.1,"ca":0.55,"p":0.31},
+    {"id":"NRC16F37","bn":"ভুট্টার মোচা (Corn Cobs)","en":"NRC16F37 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.8,"de":2.41,"nel":1.22,"cp":3.0,"ndf":83.8,"ca":0.04,"p":0.06},
+    {"id":"NRC16F48","bn":"ভুট্টা সাইলেজ, সাধারণ (Corn Silage)","en":"NRC16F48 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":35.4,"de":2.93,"nel":1.51,"cp":7.7,"ndf":0.0,"ca":0.24,"p":0.23},
+    {"id":"NRC16F49","bn":"ভুট্টা সাইলেজ, কাঁচা (Corn Silage, Immature)","en":"NRC16F49 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":31.3,"de":2.93,"nel":1.51,"cp":7.9,"ndf":42.6,"ca":0.24,"p":0.24},
+    {"id":"NRC16F50","bn":"ভুট্টা সাইলেজ, পরিপক্ক (Corn Silage, Mature)","en":"NRC16F50 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":39.6,"de":2.88,"nel":1.48,"cp":7.5,"ndf":39.3,"ca":0.23,"p":0.23},
+    {"id":"NRC16F51","bn":"ভুট্টার কান্ড সাইলেজ, কম OM","en":"NRC16F51 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":41.2,"de":2.19,"nel":1.1,"cp":7.0,"ndf":0.0,"ca":0.48,"p":0.19},
+    {"id":"NRC16F52","bn":"ভুট্টার কান্ড সাইলেজ, বেশি OM","en":"NRC16F52 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":85.0,"de":2.16,"nel":1.08,"cp":5.6,"ndf":0.0,"ca":0.39,"p":0.14},
+    {"id":"NRC16F53","bn":"ভুট্টার মোচা সাইলেজ, বেশি আঁশ","en":"NRC16F53 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":58.0,"de":3.26,"nel":1.69,"cp":7.9,"ndf":24.9,"ca":0.0,"p":0.26},
+    {"id":"NRC16F54","bn":"ভুট্টার মোচা সাইলেজ, কম আঁশ","en":"NRC16F54 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":64.8,"de":3.36,"nel":1.75,"cp":7.8,"ndf":18.1,"ca":0.04,"p":0.28},
+    {"id":"NRC16F55","bn":"তুলার আবর্জনা (Cotton Gin Trash)","en":"NRC16F55 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.3,"de":1.67,"nel":0.81,"cp":12.0,"ndf":0.0,"ca":0.0,"p":0.24},
+    {"id":"NRC16F56","bn":"তুলাবীজ সম্পূর্ণ (Cottonseed Whole)","en":"NRC16F56 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.4,"de":3.15,"nel":1.63,"cp":23.3,"ndf":50.6,"ca":0.17,"p":0.62},
+    {"id":"NRC16F57","bn":"তুলার খোসা (Cottonseed Hulls)","en":"NRC16F57 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.0,"de":1.58,"nel":0.76,"cp":7.0,"ndf":80.9,"ca":0.23,"p":0.15},
+    {"id":"NRC16F80","bn":"জোয়ার খড় (Grain Sorghum Hay)","en":"NRC16F80 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":92.6,"de":2.64,"nel":1.35,"cp":8.8,"ndf":48.1,"ca":0.28,"p":0.22},
+    {"id":"NRC16F81","bn":"জোয়ার সাইলেজ, পরিপক্ক","en":"NRC16F81 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":31.3,"de":2.73,"nel":1.4,"cp":8.2,"ndf":45.7,"ca":0.28,"p":0.22},
+    {"id":"NRC16F82","bn":"জোয়ার সাইলেজ, মধ্যপরিপক্ক","en":"NRC16F82 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":29.8,"de":2.52,"nel":1.28,"cp":8.9,"ndf":53.1,"ca":0.37,"p":0.23},
+    {"id":"NRC16F83","bn":"ঘাস-শিম মিশ্র সাইলেজ (ঘাস প্রধান)","en":"NRC16F83 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":39.6,"de":2.55,"nel":1.3,"cp":14.3,"ndf":57.7,"ca":0.55,"p":0.3},
+    {"id":"NRC16F84","bn":"ঘাস-শিম খড়, মধ্যপরিপক্ক","en":"NRC16F84 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.2,"de":2.64,"nel":1.35,"cp":15.6,"ndf":54.7,"ca":0.63,"p":0.33},
+    {"id":"NRC16F85","bn":"ঘাস-শিম খড়, পরিপক্ক","en":"NRC16F85 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":87.4,"de":2.43,"nel":1.23,"cp":10.9,"ndf":62.0,"ca":0.51,"p":0.22},
+    {"id":"NRC16F86","bn":"শিম-ঘাস খড়, পরিপক্ক","en":"NRC16F86 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":85.3,"de":2.4,"nel":1.21,"cp":17.4,"ndf":51.2,"ca":1.24,"p":0.27},
+    {"id":"NRC16F87","bn":"শিম-ঘাস খড়, কাঁচা","en":"NRC16F87 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":88.6,"de":2.64,"nel":1.35,"cp":20.3,"ndf":43.9,"ca":1.28,"p":0.3},
+    {"id":"NRC16F88","bn":"শিম-ঘাস সাইলেজ","en":"NRC16F88 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":41.0,"de":2.61,"nel":1.33,"cp":20.0,"ndf":45.9,"ca":1.26,"p":0.35},
+    {"id":"NRC16F89","bn":"ঘাস-শিম মিশ্র খড়","en":"NRC16F89 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":86.4,"de":2.38,"nel":1.2,"cp":12.1,"ndf":58.2,"ca":0.74,"p":0.25},
+    {"id":"NRC16F90","bn":"ঘাস-শিম মিশ্র সাইলেজ","en":"NRC16F90 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":40.0,"de":2.6,"nel":1.33,"cp":17.7,"ndf":51.2,"ca":0.87,"p":0.34},
+    {"id":"NRC16F91","bn":"শিম জাতীয় খড়, কাঁচা (Legume Hay)","en":"NRC16F91 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.0,"de":2.68,"nel":1.37,"cp":21.5,"ndf":37.7,"ca":1.51,"p":0.29},
+    {"id":"NRC16F92","bn":"শিম জাতীয় খড়, পরিপক্ক","en":"NRC16F92 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.0,"de":2.46,"nel":1.25,"cp":18.1,"ndf":46.6,"ca":1.37,"p":0.28},
+    {"id":"NRC16F93","bn":"শিম জাতীয় খড়, মধ্যপরিপক্ক","en":"NRC16F93 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.0,"de":2.63,"nel":1.34,"cp":20.7,"ndf":41.1,"ca":1.4,"p":0.28},
+    {"id":"NRC16F94","bn":"শিম সাইলেজ, কাঁচা","en":"NRC16F94 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":35.0,"de":2.7,"nel":1.38,"cp":22.1,"ndf":38.7,"ca":1.3,"p":0.35},
+    {"id":"NRC16F95","bn":"শিম সাইলেজ, মধ্যপরিপক্ক","en":"NRC16F95 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":42.9,"de":2.59,"nel":1.32,"cp":20.5,"ndf":43.2,"ca":1.25,"p":0.35},
+    {"id":"NRC16F99","bn":"বাজরা খড় (Millet Hay)","en":"NRC16F99 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":87.5,"de":2.25,"nel":1.13,"cp":10.7,"ndf":61.9,"ca":0.54,"p":0.28},
+    {"id":"NRC16F100","bn":"বাজরা সাইলেজ (Millet Silage)","en":"NRC16F100 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":29.3,"de":2.25,"nel":1.13,"cp":13.0,"ndf":59.7,"ca":0.55,"p":0.33},
+    {"id":"NRC16F103","bn":"ওটের খড় (Oat Hay)","en":"NRC16F103 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.5,"de":2.51,"nel":1.28,"cp":8.5,"ndf":59.0,"ca":0.32,"p":0.21},
+    {"id":"NRC16F104","bn":"ওটের খোসা (Oat Hulls)","en":"NRC16F104 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.4,"de":2.23,"nel":1.12,"cp":5.0,"ndf":73.6,"ca":0.16,"p":0.15},
+    {"id":"NRC16F105","bn":"ওট সাইলেজ, কাঁচা","en":"NRC16F105 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":33.7,"de":2.58,"nel":1.31,"cp":18.5,"ndf":45.8,"ca":0.72,"p":0.4},
+    {"id":"NRC16F106","bn":"ওট সাইলেজ, মধ্যপরিপক্ক","en":"NRC16F106 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":35.8,"de":2.41,"nel":1.22,"cp":12.9,"ndf":57.4,"ca":0.51,"p":0.34},
+    {"id":"NRC16F107","bn":"মটর খড় (Pea Hay)","en":"NRC16F107 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.5,"de":2.66,"nel":1.36,"cp":15.9,"ndf":43.4,"ca":1.04,"p":0.28},
+    {"id":"NRC16F108","bn":"মটর সাইলেজ (Pea Silage)","en":"NRC16F108 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":31.7,"de":2.46,"nel":1.25,"cp":17.0,"ndf":52.5,"ca":0.88,"p":0.34},
+    {"id":"NRC16F109","bn":"চিনাবাদাম খড় (Peanut Hay)","en":"NRC16F109 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.3,"de":2.37,"nel":1.2,"cp":12.0,"ndf":45.8,"ca":1.34,"p":0.17},
+    {"id":"NRC16F110","bn":"চিনাবাদামের খোসা (Peanut Hulls)","en":"NRC16F110 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":94.0,"de":1.57,"nel":0.75,"cp":8.9,"ndf":69.6,"ca":0.26,"p":0.09},
+    {"id":"NRC16F112","bn":"চিনাবাদামের ত্বক (Peanut Skins)","en":"NRC16F112 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":92.4,"de":2.74,"nel":1.4,"cp":16.2,"ndf":47.4,"ca":0.3,"p":0.16},
+    {"id":"NRC16F120","bn":"ধানের তুষ/খোসা (Rice Hulls)","en":"NRC16F120 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.0,"de":1.17,"nel":0.53,"cp":3.7,"ndf":75.1,"ca":0.24,"p":0.12},
+    {"id":"NRC16F122","bn":"ধানের সাইলেজ, সবুজ","en":"NRC16F122 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":42.9,"de":2.18,"nel":1.09,"cp":8.3,"ndf":61.5,"ca":9.0,"p":9.0},
+    {"id":"NRC16F125","bn":"রাই ঘাস তাজা, মধ্যপরিপক্ক","en":"NRC16F125 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":19.5,"de":2.78,"nel":1.43,"cp":20.5,"ndf":49.1,"ca":0.51,"p":0.39},
+    {"id":"NRC16F126","bn":"রাই খড়, কাঁচা","en":"NRC16F126 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.0,"de":2.8,"nel":1.44,"cp":22.9,"ndf":47.0,"ca":0.59,"p":0.4},
+    {"id":"NRC16F127","bn":"রাই খড়, পরিপক্ক","en":"NRC16F127 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":92.7,"de":2.36,"nel":1.19,"cp":7.6,"ndf":66.8,"ca":0.37,"p":0.18},
+    {"id":"NRC16F128","bn":"রাই সাইলেজ, কাঁচা","en":"NRC16F128 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":34.7,"de":2.64,"nel":1.35,"cp":16.4,"ndf":50.5,"ca":0.57,"p":0.42},
+    {"id":"NRC16F129","bn":"রাই সাইলেজ, পরিপক্ক","en":"NRC16F129 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":67.2,"de":2.32,"nel":1.17,"cp":8.3,"ndf":66.2,"ca":0.36,"p":0.25},
+    {"id":"NRC16F130","bn":"রাই সাইলেজ, মধ্যপরিপক্ক","en":"NRC16F130 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":34.9,"de":2.48,"nel":1.26,"cp":14.4,"ndf":58.0,"ca":0.48,"p":0.37},
+    {"id":"NRC16F131","bn":"রাই খড়, মধ্যপরিপক্ক","en":"NRC16F131 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.3,"de":2.5,"nel":1.27,"cp":12.0,"ndf":57.3,"ca":0.51,"p":0.28},
+    {"id":"NRC16F135","bn":"জোয়ার চারা সাইলেজ, কাঁচা","en":"NRC16F135 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":29.2,"de":2.45,"nel":1.24,"cp":11.7,"ndf":56.7,"ca":0.43,"p":0.25},
+    {"id":"NRC16F136","bn":"জোয়ার চারা সাইলেজ, পরিপক্ক","en":"NRC16F136 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":28.7,"de":2.38,"nel":1.2,"cp":11.3,"ndf":61.6,"ca":0.49,"p":0.29},
+    {"id":"NRC16F138","bn":"জোয়ার খড় (Sorghum Hay)","en":"NRC16F138 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.4,"de":2.39,"nel":1.21,"cp":10.2,"ndf":63.0,"ca":0.39,"p":0.22},
+    {"id":"NRC16F139","bn":"জোয়ার-সয়াবিন সাইলেজ","en":"NRC16F139 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":32.3,"de":2.48,"nel":1.26,"cp":11.7,"ndf":54.4,"ca":0.62,"p":0.27},
+    {"id":"NRC16F140","bn":"জোয়ার-সুদান ঘাস সাইলেজ","en":"NRC16F140 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":31.7,"de":2.31,"nel":1.16,"cp":12.3,"ndf":59.5,"ca":0.52,"p":0.3},
+    {"id":"NRC16F142","bn":"জোয়ার-সুদান ঘাস খড়","en":"NRC16F142 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.5,"de":2.34,"nel":1.18,"cp":9.8,"ndf":61.0,"ca":0.37,"p":0.24},
+    {"id":"NRC16F143","bn":"সয়াবিন খড় (Soybean Hay)","en":"NRC16F143 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.6,"de":2.68,"nel":1.37,"cp":20.1,"ndf":40.3,"ca":1.41,"p":0.28},
+    {"id":"NRC16F144","bn":"সয়াবিনের খোসা (Soybean Hulls)","en":"NRC16F144 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.4,"de":2.7,"nel":1.38,"cp":11.9,"ndf":66.7,"ca":0.64,"p":0.13},
+    {"id":"NRC16F147","bn":"সয়াবিন সাইলেজ (Soybean Silage)","en":"NRC16F147 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":37.5,"de":2.56,"nel":1.3,"cp":18.0,"ndf":45.3,"ca":1.33,"p":0.32},
+    {"id":"NRC16F151","bn":"সুদান ঘাস খড়, পরিপক্ক","en":"NRC16F151 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":93.1,"de":2.29,"nel":1.15,"cp":8.1,"ndf":65.8,"ca":0.45,"p":0.21},
+    {"id":"NRC16F152","bn":"সুদান ঘাস খড়, মধ্যপরিপক্ক","en":"NRC16F152 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":83.1,"de":2.18,"nel":1.09,"cp":14.7,"ndf":54.6,"ca":1.25,"p":0.35},
+    {"id":"NRC16F153","bn":"সুদান ঘাস সাইলেজ, পরিপক্ক","en":"NRC16F153 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":31.5,"de":2.16,"nel":1.08,"cp":9.5,"ndf":66.6,"ca":0.45,"p":0.27},
+    {"id":"NRC16F154","bn":"সুদান ঘাস সাইলেজ, মধ্যপরিপক্ক","en":"NRC16F154 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":31.5,"de":2.27,"nel":1.14,"cp":13.4,"ndf":60.7,"ca":0.52,"p":0.32},
+    {"id":"NRC16F155","bn":"আখের ছোবড়া খড় (Bagasse Hay)","en":"NRC16F155 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":93.2,"de":1.55,"nel":0.74,"cp":3.9,"ndf":76.9,"ca":0.34,"p":0.05},
+    {"id":"NRC16F156","bn":"আখের ছোবড়া সাইলেজ","en":"NRC16F156 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":34.6,"de":1.83,"nel":0.9,"cp":5.0,"ndf":72.0,"ca":0.25,"p":0.07},
+    {"id":"NRC16F159","bn":"সূর্যমুখী সাইলেজ (Sunflower Silage)","en":"NRC16F159 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":21.6,"de":2.42,"nel":1.23,"cp":13.3,"ndf":45.3,"ca":1.12,"p":0.38},
+    {"id":"NRC16F160","bn":"মিষ্টি ভুট্টার অবশিষ্ট","en":"NRC16F160 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":22.5,"de":2.82,"nel":1.45,"cp":9.8,"ndf":56.3,"ca":0.24,"p":0.27},
+    {"id":"NRC16F162","bn":"টমেটোর পোমাস (Tomato Pomace)","en":"NRC16F162 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":24.7,"de":2.63,"nel":1.34,"cp":19.3,"ndf":60.0,"ca":0.22,"p":0.47},
+    {"id":"NRC16F164","bn":"ট্রিটিকেল খড় (Triticale Hay)","en":"NRC16F164 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":91.0,"de":2.48,"nel":1.26,"cp":10.3,"ndf":60.0,"ca":0.33,"p":0.24},
+    {"id":"NRC16F165","bn":"ট্রিটিকেল+মটর সাইলেজ","en":"NRC16F165 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":34.2,"de":2.5,"nel":1.27,"cp":16.0,"ndf":55.7,"ca":0.68,"p":0.35},
+    {"id":"NRC16F166","bn":"ট্রিটিকেল সাইলেজ, পরিপক্ক","en":"NRC16F166 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":30.1,"de":2.55,"nel":1.3,"cp":14.2,"ndf":58.6,"ca":0.38,"p":0.34},
+    {"id":"NRC16F167","bn":"ট্রিটিকেল সাইলেজ, মধ্যপরিপক্ক","en":"NRC16F167 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":33.3,"de":2.56,"nel":1.3,"cp":17.8,"ndf":52.2,"ca":0.52,"p":0.41},
+    {"id":"NRC16F171","bn":"গমের খড়, শীষসহ (Wheat Hay)","en":"NRC16F171 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.6,"de":2.52,"nel":1.28,"cp":9.9,"ndf":52.8,"ca":0.31,"p":0.23},
+    {"id":"NRC16F172","bn":"গমের খড়, সবুজ (Wheat Hay)","en":"NRC16F172 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":90.5,"de":2.48,"nel":1.26,"cp":10.5,"ndf":58.0,"ca":0.29,"p":0.21},
+    {"id":"NRC16F174","bn":"গম সাইলেজ, শীষসহ","en":"NRC16F174 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":34.8,"de":2.51,"nel":1.28,"cp":10.7,"ndf":51.1,"ca":0.3,"p":0.29},
+    {"id":"NRC16F175","bn":"গম সাইলেজ, সবুজ","en":"NRC16F175 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":35.6,"de":2.53,"nel":1.29,"cp":13.4,"ndf":56.6,"ca":0.43,"p":0.32},
+    {"id":"NRC16F176","bn":"গমের নাড়া/খড় (Wheat Straw)","en":"NRC16F176 | NRC 2021 Table 19-1","cat":"Forage/fiber","dm":89.5,"de":1.96,"nel":0.97,"cp":4.5,"ndf":76.9,"ca":0.38,"p":0.12},
+    // ===== বাংলাদেশ প্রচলিত রাফেজ / BD Common Roughages =====
+    {"id":"BD_R001","bn":"ধানের খড় (Rice Straw)","en":"BD_R001 | বাংলাদেশ প্রচলিত","cat":"Forage/fiber","dm":89.0,"de":1.70,"nel":0.82,"cp":3.8,"ndf":74.0,"ca":0.27,"p":0.09},
+    {"id":"BD_R002","bn":"নেপিয়ার ঘাস তাজা (Napier Grass, Fresh)","en":"BD_R002 | বাংলাদেশ প্রচলিত","cat":"Forage/fiber","dm":18.5,"de":2.35,"nel":1.19,"cp":8.5,"ndf":65.0,"ca":0.38,"p":0.22},
+    {"id":"BD_R003","bn":"নেপিয়ার ঘাস শুকনো (Napier Grass, Dried)","en":"BD_R003 | বাংলাদেশ প্রচলিত","cat":"Forage/fiber","dm":88.0,"de":2.30,"nel":1.16,"cp":7.8,"ndf":68.0,"ca":0.36,"p":0.20},
+    {"id":"BD_R004","bn":"পারা ঘাস (Para Grass / Brachiaria mutica)","en":"BD_R004 | বাংলাদেশ প্রচলিত","cat":"Forage/fiber","dm":19.0,"de":2.28,"nel":1.15,"cp":9.2,"ndf":67.0,"ca":0.40,"p":0.24},
+    {"id":"BD_R005","bn":"জার্মান ঘাস (German Grass / Setaria)","en":"BD_R005 | বাংলাদেশ প্রচলিত","cat":"Forage/fiber","dm":20.0,"de":2.32,"nel":1.17,"cp":8.8,"ndf":65.5,"ca":0.42,"p":0.22},
+    {"id":"BD_R006","bn":"ভুট্টার কান্ড তাজা (Corn Stover, Fresh)","en":"BD_R006 | বাংলাদেশ প্রচলিত","cat":"Forage/fiber","dm":30.0,"de":2.20,"nel":1.10,"cp":6.5,"ndf":72.0,"ca":0.35,"p":0.16},
+    {"id":"BD_R007","bn":"আখের উপরিভাগ (Sugarcane Tops)","en":"BD_R007 | বাংলাদেশ প্রচলিত","cat":"Forage/fiber","dm":22.0,"de":2.10,"nel":1.05,"cp":5.8,"ndf":70.0,"ca":0.32,"p":0.13},
+    {"id":"BD_R008","bn":"কলার মোচা/কাণ্ড তাজা (Banana Pseudostem)","en":"BD_R008 | বাংলাদেশ প্রচলিত","cat":"Forage/fiber","dm":6.0,"de":1.95,"nel":0.95,"cp":3.5,"ndf":82.0,"ca":0.54,"p":0.14},
+    {"id":"BD_R009","bn":"মশুর/ডালের খড় (Lentil Straw)","en":"BD_R009 | বাংলাদেশ প্রচলিত","cat":"Forage/fiber","dm":87.5,"de":2.10,"nel":1.05,"cp":9.0,"ndf":55.0,"ca":1.10,"p":0.18},
+    {"id":"BD_R010","bn":"সরিষার খড় (Mustard Straw)","en":"BD_R010 | বাংলাদেশ প্রচলিত","cat":"Forage/fiber","dm":88.0,"de":1.80,"nel":0.88,"cp":5.5,"ndf":70.0,"ca":0.60,"p":0.12},
+    {"id":"BD_R011","bn":"হাইব্রিড নেপিয়ার BARI-3, তাজা (Hybrid Napier BARI-3)","en":"BD_R011 | বাংলাদেশ প্রচলিত","cat":"Forage/fiber","dm":19.5,"de":2.40,"nel":1.21,"cp":9.5,"ndf":63.0,"ca":0.42,"p":0.25},
+    {"id":"BD_R012","bn":"দূর্বা ঘাস তাজা (Dub/Bermuda Grass, Local)","en":"BD_R012 | বাংলাদেশ প্রচলিত","cat":"Forage/fiber","dm":25.0,"de":2.20,"nel":1.10,"cp":7.5,"ndf":68.0,"ca":0.35,"p":0.20}
   ],
   concentrate: [
-    {"id":"NRC16F1","bn":"Alfalfa Meal","en":"NRC16F1 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.7,"de":2.5,"nel":1.27,"cp":19.5,"ndf":42.9,"ca":1.5,"p":0.27},
-    {"id":"NRC16F4","bn":"Bakery By-product Meal","en":"NRC16F4 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.1,"de":3.6,"nel":1.88,"cp":12.8,"ndf":12.7,"ca":0.37,"p":0.35},
-    {"id":"NRC16F5","bn":"Bakery By-product, Bread Waste","en":"NRC16F5 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":67.4,"de":3.66,"nel":1.91,"cp":14.9,"ndf":6.3,"ca":0.22,"p":0.26},
-    {"id":"NRC16F6","bn":"Bakery By-product, Cereal","en":"NRC16F6 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":91.1,"de":3.44,"nel":1.79,"cp":9.2,"ndf":7.2,"ca":0.22,"p":0.28},
-    {"id":"NRC16F7","bn":"Bakery By-product, Cookies","en":"NRC16F7 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.3,"de":3.59,"nel":1.88,"cp":12.9,"ndf":14.4,"ca":0.24,"p":0.42},
-    {"id":"NRC16F8","bn":"Barley Grain. Dry. Ground","en":"NRC16F8 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.7,"de":3.36,"nel":1.75,"cp":11.8,"ndf":18.6,"ca":0.12,"p":0.38},
-    {"id":"NRC16F10","bn":"Barley Malt Sprouts","en":"NRC16F10 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":81.2,"de":3.13,"nel":1.62,"cp":23.9,"ndf":40.5,"ca":0.19,"p":0.61},
-    {"id":"NRC16F15","bn":"Beet Pulp. Dry, Molasses Added","en":"NRC16F15 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.6,"de":2.74,"nel":1.4,"cp":8.9,"ndf":39.7,"ca":1.18,"p":0.09},
-    {"id":"NRC16F16","bn":"Beet Pulp, Wet","en":"NRC16F16 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":22.7,"de":2.73,"nel":1.4,"cp":9.1,"ndf":44.1,"ca":1.12,"p":0.13},
-    {"id":"NRC16F20","bn":"Blood Meal. Low dRUP","en":"NRC16F20 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.9,"de":3.82,"nel":2.0,"cp":95.0,"ndf":0.0,"ca":0.13,"p":0.28},
-    {"id":"NRC16F21","bn":"Brewers Grains, Dry","en":"NRC16F21 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":93.1,"de":2.98,"nel":1.54,"cp":25.3,"ndf":51.8,"ca":0.3,"p":0.64},
-    {"id":"NRC16F22","bn":"Brewers Grains. Wet","en":"NRC16F22 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":22.5,"de":3.11,"nel":1.61,"cp":28.1,"ndf":49.3,"ca":0.36,"p":0.69},
-    {"id":"NRC16F23","bn":"Brewers Yeast. Dry","en":"NRC16F23 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.8,"de":3.94,"nel":2.07,"cp":50.7,"ndf":1.6,"ca":0.12,"p":1.19},
-    {"id":"NRC16F24","bn":"Brewers Yeast Wet","en":"NRC16F24 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":13.4,"de":3.85,"nel":2.02,"cp":43.3,"ndf":11.5,"ca":0.37,"p":1.49},
-    {"id":"NRC16F25","bn":"Calcium Soaps","en":"NRC16F25 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":95.3,"de":5.42,"nel":2.89,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F26","bn":"Candy (Not Chocolate) By-product","en":"NRC16F26 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.1,"de":3.48,"nel":1.81,"cp":2.4,"ndf":2.3,"ca":0.06,"p":0.03},
-    {"id":"NRC16F27","bn":"Candy By-product, High Protein","en":"NRC16F27 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.9,"de":3.31,"nel":1.72,"cp":14.6,"ndf":29.7,"ca":0.32,"p":0.49},
-    {"id":"NRC16F28","bn":"Canola Meal. Solvent Extracted","en":"NRC16F28 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.1,"de":3.14,"nel":1.63,"cp":41.5,"ndf":29.0,"ca":0.79,"p":1.15},
-    {"id":"NRC16F29","bn":"Canola Seed. Ground","en":"NRC16F29 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":95.0,"de":4.31,"nel":2.28,"cp":23.4,"ndf":28.7,"ca":0.44,"p":0.69},
-    {"id":"NRC16F30","bn":"Chocolate By-product","en":"NRC16F30 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":94.3,"de":4.05,"nel":2.13,"cp":10.0,"ndf":13.2,"ca":0.15,"p":0.28},
-    {"id":"NRC16F31","bn":"Citrus Pulp. Dry","en":"NRC16F31 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.2,"de":3.02,"nel":1.56,"cp":7.2,"ndf":24.1,"ca":1.86,"p":0.12},
-    {"id":"NRC16F32","bn":"Citrus Pulp. Wet","en":"NRC16F32 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":18.3,"de":2.97,"nel":1.53,"cp":8.7,"ndf":25.9,"ca":1.27,"p":0.16},
-    {"id":"NRC16F36","bn":"Corn and Cob Meal. Dry","en":"NRC16F36 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":86.3,"de":3.35,"nel":1.74,"cp":8.4,"ndf":19.0,"ca":0.05,"p":0.29},
-    {"id":"NRC16F38","bn":"Corn Germ","en":"NRC16F38 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.2,"de":3.63,"nel":1.9,"cp":15.4,"ndf":27.0,"ca":0.03,"p":1.17},
-    {"id":"NRC16F39","bn":"Corn Germ Meal","en":"NRC16F39 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.2,"de":3.12,"nel":1.61,"cp":26.1,"ndf":44.8,"ca":0.04,"p":0.83},
-    {"id":"NRC16F40","bn":"Corn Gluten Feed. Dry","en":"NRC16F40 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.2,"de":3.21,"nel":1.66,"cp":23.2,"ndf":35.7,"ca":0.07,"p":1.07},
-    {"id":"NRC16F41","bn":"Corn Gluten Feed. Wet","en":"NRC16F41 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":45.6,"de":3.23,"nel":1.68,"cp":23.1,"ndf":36.9,"ca":0.1,"p":1.07},
-    {"id":"NRC16F42","bn":"Corn Gluten Meal","en":"NRC16F42 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.5,"de":4.33,"nel":2.29,"cp":68.5,"ndf":6.8,"ca":0.04,"p":0.49},
-    {"id":"NRC16F43","bn":"Corn Grain Screenings","en":"NRC16F43 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":86.9,"de":3.46,"nel":1.8,"cp":8.6,"ndf":11.7,"ca":0.18,"p":0.32},
-    {"id":"NRC16F44","bn":"Corn Grain Dry, Medium Grind","en":"NRC16F44 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":86.9,"de":3.46,"nel":1.8,"cp":8.5,"ndf":9.8,"ca":0.04,"p":0.31},
-    {"id":"NRC16F45","bn":"Corn Grain High Moisture, Fine Grind","en":"NRC16F45 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":72.3,"de":3.7,"nel":1.94,"cp":8.5,"ndf":9.6,"ca":0.04,"p":0.31},
-    {"id":"NRC16F46","bn":"Corn Grain, Steam-Flaked","en":"NRC16F46 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":85.7,"de":3.63,"nel":1.9,"cp":8.0,"ndf":8.6,"ca":0.06,"p":0.24},
-    {"id":"NRC16F47","bn":"Corn Hominy","en":"NRC16F47 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.1,"de":3.5,"nel":1.83,"cp":10.1,"ndf":16.9,"ca":0.06,"p":0.52},
-    {"id":"NRC16F58","bn":"Cottonseed Meal","en":"NRC16F58 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.9,"de":3.32,"nel":1.73,"cp":46.7,"ndf":28.1,"ca":0.25,"p":1.31},
-    {"id":"NRC16F59","bn":"Distillers Grains and Solubles. Dried. High Fat","en":"NRC16F59 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.1,"de":3.49,"nel":1.82,"cp":30.2,"ndf":32.1,"ca":0.12,"p":0.88},
-    {"id":"NRC16F60","bn":"Distillers Grains and Solubles, Dried, High Protein","en":"NRC16F60 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.0,"de":3.34,"nel":1.74,"cp":39.0,"ndf":37.6,"ca":0.08,"p":0.64},
-    {"id":"NRC16F61","bn":"Distillers Grains and Solubles. Dried, Low Fat","en":"NRC16F61 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":3.44,"nel":1.79,"cp":31.0,"ndf":30.8,"ca":0.11,"p":0.89},
-    {"id":"NRC16F62","bn":"Distillers Grains and Solubles. Modified Wet","en":"NRC16F62 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":25.0,"de":3.5,"nel":1.83,"cp":30.3,"ndf":27.1,"ca":0.21,"p":0.86},
-    {"id":"NRC16F63","bn":"Distillers Grains and Solubles. Wet","en":"NRC16F63 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":25.0,"de":3.5,"nel":1.83,"cp":31.5,"ndf":31.7,"ca":0.13,"p":0.76},
-    {"id":"NRC16F64","bn":"Distillers Solubles","en":"NRC16F64 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":31.2,"de":3.62,"nel":1.89,"cp":22.6,"ndf":4.8,"ca":0.13,"p":1.82},
-    {"id":"NRC16F65","bn":"Fat. Canola Oil","en":"NRC16F65 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F66","bn":"Fat. Corn Oil","en":"NRC16F66 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F67","bn":"Fat. Cottonseed Oil","en":"NRC16F67 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F68","bn":"Fat. Lard","en":"NRC16F68 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":5.8,"nel":3.1,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F69","bn":"Fat. Flaxseed Oil","en":"NRC16F69 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F70","bn":"Fat, Safflower Oil","en":"NRC16F70 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F71","bn":"Fat. Soybean Oil","en":"NRC16F71 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F72","bn":"Fat. Sunflower Oil","en":"NRC16F72 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F73","bn":"Fat. Tallow","en":"NRC16F73 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.8,"de":5.8,"nel":3.1,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F74","bn":"Feather Meal","en":"NRC16F74 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.9,"de":4.12,"nel":2.17,"cp":90.6,"ndf":0.0,"ca":0.5,"p":0.32},
-    {"id":"NRC16F75","bn":"Fish Meal","en":"NRC16F75 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.0,"de":3.63,"nel":1.9,"cp":69.2,"ndf":0.0,"ca":5.56,"p":3.16},
-    {"id":"NRC16F77","bn":"Fruit and Vegetable By-product. Wet","en":"NRC16F77 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":19.8,"de":3.04,"nel":1.57,"cp":13.6,"ndf":28.7,"ca":0.72,"p":0.34},
-    {"id":"NRC16F79","bn":"Grain Screenings. S ource Unknown","en":"NRC16F79 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.2,"de":3.03,"nel":1.56,"cp":16.2,"ndf":34.1,"ca":0.26,"p":0.66},
-    {"id":"NRC16F96","bn":"Flaxseed","en":"NRC16F96 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.7,"de":4.1,"nel":2.16,"cp":22.8,"ndf":30.4,"ca":0.24,"p":0.59},
-    {"id":"NRC16F97","bn":"Flaxseed Meal","en":"NRC16F97 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.6,"de":3.24,"nel":1.68,"cp":38.5,"ndf":30.4,"ca":0.44,"p":0.95},
-    {"id":"NRC16F98","bn":"Meat a nd Bone Meal. Porcine","en":"NRC16F98 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":96.1,"de":3.25,"nel":1.69,"cp":56.6,"ndf":0.0,"ca":9.29,"p":4.59},
-    {"id":"NRC16F101","bn":"Molasses","en":"NRC16F101 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":65.4,"de":3.07,"nel":1.59,"cp":9.3,"ndf":0.6,"ca":0.73,"p":0.26},
-    {"id":"NRC16F102","bn":"Oat Grain. Rolled","en":"NRC16F102 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.3,"de":3.27,"nel":1.7,"cp":12.2,"ndf":28.6,"ca":0.13,"p":0.38},
-    {"id":"NRC16F111","bn":"Peanut Meal. Expellers","en":"NRC16F111 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":94.0,"de":3.73,"nel":1.95,"cp":42.6,"ndf":22.9,"ca":0.35,"p":0.57},
-    {"id":"NRC16F113","bn":"Peanuts","en":"NRC16F113 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":94.1,"de":4.6,"nel":2.44,"cp":25.6,"ndf":0.0,"ca":0.09,"p":0.0},
-    {"id":"NRC16F114","bn":"Peas","en":"NRC16F114 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.9,"de":3.67,"nel":1.92,"cp":24.3,"ndf":0.0,"ca":0.11,"p":0.0},
-    {"id":"NRC16F115","bn":"Pineapple Cannery Waste","en":"NRC16F115 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":23.4,"de":2.42,"nel":1.23,"cp":7.0,"ndf":0.0,"ca":0.43,"p":0.0},
-    {"id":"NRC16F116","bn":"Potato By-product Meal","en":"NRC16F116 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":23.0,"de":3.16,"nel":1.64,"cp":10.0,"ndf":0.0,"ca":0.17,"p":0.0},
-    {"id":"NRC16F117","bn":"Poultry By-product Meal","en":"NRC16F117 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":95.5,"de":4.25,"nel":2.24,"cp":65.6,"ndf":0.0,"ca":4.31,"p":2.48},
-    {"id":"NRC16F118","bn":"Rice Bran","en":"NRC16F118 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.4,"de":3.22,"nel":1.67,"cp":14.8,"ndf":23.1,"ca":0.78,"p":1.77},
-    {"id":"NRC16F119","bn":"Rice Bran. Defatted","en":"NRC16F119 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.5,"de":2.85,"nel":1.46,"cp":18.5,"ndf":25.9,"ca":0.83,"p":2.48},
-    {"id":"NRC16F121","bn":"R ice S iiage. Headed","en":"NRC16F121 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":41.1,"de":2.49,"nel":1.26,"cp":7.1,"ndf":41.9,"ca":0.21,"p":0.23},
-    {"id":"NRC16F123","bn":"Rice, Grain","en":"NRC16F123 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":87.9,"de":3.48,"nel":1.81,"cp":8.1,"ndf":6.4,"ca":0.02,"p":0.26},
-    {"id":"NRC16F124","bn":"Rye Annual Fresh. Immature","en":"NRC16F124 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":15.8,"de":2.94,"nel":1.51,"cp":27.5,"ndf":42.9,"ca":0.48,"p":0.49},
-    {"id":"NRC16F132","bn":"Rye Grain","en":"NRC16F132 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":86.0,"de":3.41,"nel":1.78,"cp":11.8,"ndf":16.0,"ca":0.25,"p":0.38},
-    {"id":"NRC16F133","bn":"Safflower Meal","en":"NRC16F133 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":94.0,"de":2.51,"nel":1.28,"cp":26.2,"ndf":55.4,"ca":0.32,"p":0.65},
-    {"id":"NRC16F134","bn":"Soybean Meal. Solvent Extracted. 48% CP","en":"NRC16F134 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.3,"de":3.99,"nel":2.1,"cp":52.6,"ndf":11.1,"ca":0.4,"p":0.74},
-    {"id":"NRC16F137","bn":"Sorghum Grain. Ground","en":"NRC16F137 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.9,"de":3.29,"nel":1.71,"cp":12.5,"ndf":6.1,"ca":0.1,"p":0.38},
-    {"id":"NRC16F145","bn":"Soybean Meal. Expellers","en":"NRC16F145 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":91.2,"de":3.9,"nel":2.05,"cp":47.6,"ndf":19.6,"ca":0.34,"p":0.72},
-    {"id":"NRC16F146","bn":"Soybean Meal. Extruded","en":"NRC16F146 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":93.4,"de":4.16,"nel":2.19,"cp":40.4,"ndf":18.4,"ca":0.27,"p":0.63},
-    {"id":"NRC16F148","bn":"Soybeans, Whole Raw","en":"NRC16F148 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.1,"de":4.33,"nel":2.29,"cp":40.0,"ndf":11.9,"ca":0.27,"p":0.65},
-    {"id":"NRC16F149","bn":"Soybeans, Whole Roasted","en":"NRC16F149 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":94.0,"de":4.16,"nel":2.19,"cp":40.0,"ndf":18.4,"ca":0.28,"p":0.63},
-    {"id":"NRC16F150","bn":"Spelt Grain","en":"NRC16F150 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":87.4,"de":3.0,"nel":1.55,"cp":12.9,"ndf":39.3,"ca":0.09,"p":0.38},
-    {"id":"NRC16F157","bn":"Sunflower Meal","en":"NRC16F157 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.2,"de":2.99,"nel":1.54,"cp":37.0,"ndf":40.2,"ca":0.46,"p":1.13},
-    {"id":"NRC16F158","bn":"Sunflower Seed","en":"NRC16F158 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.7,"de":4.16,"nel":2.19,"cp":20.1,"ndf":35.2,"ca":0.2,"p":0.73},
-    {"id":"NRC16F161","bn":"Tapioca (Cassava)","en":"NRC16F161 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":87.7,"de":3.27,"nel":1.7,"cp":2.5,"ndf":8.1,"ca":0.18,"p":0.09},
-    {"id":"NRC16F163","bn":"Triticale Grain","en":"NRC16F163 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.4,"de":3.44,"nel":1.79,"cp":12.1,"ndf":14.1,"ca":0.09,"p":0.35},
-    {"id":"NRC16F168","bn":"Urea","en":"NRC16F168 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":2.21,"nel":1.11,"cp":281.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F169","bn":"Wheat Bran","en":"NRC16F169 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.1,"de":3.06,"nel":1.58,"cp":17.4,"ndf":40.1,"ca":0.13,"p":1.05},
-    {"id":"NRC16F170","bn":"Wheat Grain, Ground","en":"NRC16F170 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":85.7,"de":3.56,"nel":1.86,"cp":13.5,"ndf":12.5,"ca":0.1,"p":0.36},
-    {"id":"NRC16F173","bn":"Wheat Middlings","en":"NRC16F173 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.3,"de":3.07,"nel":1.59,"cp":19.1,"ndf":38.7,"ca":0.14,"p":1.21},
-    {"id":"NRC16F177","bn":"Whey, Dry","en":"NRC16F177 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.6,"de":3.62,"nel":1.89,"cp":17.8,"ndf":0.6,"ca":0.92,"p":0.89},
-    {"id":"NRC16F178","bn":"Whey, Wet","en":"NRC16F178 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":22.9,"de":3.16,"nel":1.64,"cp":7.4,"ndf":2.2,"ca":1.26,"p":1.29},
-    {"id":"NRC16F1000","bn":"Blood Meal. High dRUP","en":"NRC16F1000 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.9,"de":4.56,"nel":2.42,"cp":95.0,"ndf":0.0,"ca":0.13,"p":0.28},
-    {"id":"NRC16F1001","bn":"Rumen-Protected Methionine","en":"NRC16F1001 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":98.0,"de":0.0,"nel":0.0,"cp":75.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1002","bn":"Rumen-Protected Lysine","en":"NRC16F1002 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":98.0,"de":0.0,"nel":0.0,"cp":75.0,"ndf":0.0,"ca":7.0,"p":7.0},
-    {"id":"NRC16F1003","bn":"Calcium carbonate, CaCO3","en":"NRC16F1003 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":39.4,"p":0.0},
-    {"id":"NRC16F1004","bn":"Calcium chloride anhydrous, CaCl2","en":"NRC16F1004 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":36.1,"p":0.0},
-    {"id":"NRC16F1005","bn":"Calcium chloride dihydrate, CaCl2 2H2O","en":"NRC16F1005 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":27.5,"p":0.0},
-    {"id":"NRC16F1006","bn":"Calcium hydroxide, Ca(OH)2","en":"NRC16F1006 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":54.1,"p":0.0},
-    {"id":"NRC16F1007","bn":"Calcium phosphate (dibasic), CaHPO4","en":"NRC16F1007 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":22.0,"p":19.3},
-    {"id":"NRC16F1008","bn":"Calcium phosphate (monobasic), Ca(H2PO4)2","en":"NRC16F1008 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":16.4,"p":21.6},
-    {"id":"NRC16F1009","bn":"Calcium oxide, CaO","en":"NRC16F1009 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":71.5,"p":0.0},
-    {"id":"NRC16F1010","bn":"Calcium sulfate dihydrate, CaSO4 2H2O","en":"NRC16F1010 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":23.3,"p":0.0},
-    {"id":"NRC16F1011","bn":"Bone meal","en":"NRC16F1011 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":31.0,"p":12.9},
-    {"id":"NRC16F1012","bn":"Dolomite limestone (magnesium)","en":"NRC16F1012 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":22.3,"p":0.0},
-    {"id":"NRC16F1013","bn":"Limestone, ground","en":"NRC16F1013 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":35.0,"p":0.0},
-    {"id":"NRC16F1014","bn":"Oystershell, ground","en":"NRC16F1014 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":38.0,"p":0.0},
-    {"id":"NRC16F1015","bn":"Magnesium chloride hexahydrate. MgCl2· 6H20","en":"NRC16F1015 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1016","bn":"Potassium chloride. KCl","en":"NRC16F1016 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1017","bn":"Sodium chloride (salt). NaCl","en":"NRC16F1017 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1018","bn":"Magnesium carbonate. MgCO3","en":"NRC16F1018 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1019","bn":"Magnesium hydroxide. Mg(0H)2","en":"NRC16F1019 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1020","bn":"Magnesium oxide, MgO","en":"NRC16F1020 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":10.45,"p":0.0},
-    {"id":"NRC16F1021","bn":"Magnesium sulfate heptahydrare. MgSO4 · 7H20","en":"NRC16F1021 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1022","bn":"Ammonium phosphate (dibasic), (NH4)2HPO4","en":"NRC16F1022 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":20.6},
-    {"id":"NRC16F1023","bn":"Ammonium phosphate (monobasic), (NH4)H2PO4","en":"NRC16F1023 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":24.7},
-    {"id":"NRC16F1024","bn":"Phosphate, Curacao","en":"NRC16F1024 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":35.1,"p":14.1},
-    {"id":"NRC16F1025","bn":"Phosphate, defluorinated","en":"NRC16F1025 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":32.0,"p":18.0},
-    {"id":"NRC16F1026","bn":"Phosphate, monosodium (H2O)","en":"NRC16F1026 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":22.5},
-    {"id":"NRC16F1027","bn":"Phosphoric acid, H3PO4","en":"NRC16F1027 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":75.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":31.6},
-    {"id":"NRC16F1028","bn":"Sodium tripolyphosphate, Na5P3O10","en":"NRC16F1028 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":25.0},
-    {"id":"NRC16F1029","bn":"Pota.~sium bicarbonate. KHC01","en":"NRC16F1029 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1030","bn":"Potassium carbonate. K2C01","en":"NRC16F1030 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1031","bn":"Potassium iodide. KI","en":"NRC16F1031 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1032","bn":"Potassium sulfate. K2 SO","en":"NRC16F1032 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1033","bn":"Sodium bicarbonate, NaHCO3","en":"NRC16F1033 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1034","bn":"Sodium carbonate monohydrate, NaCO3 · H2O","en":"NRC16F1034 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1035","bn":"Sodium sesquicarbonate dehydrate, Na2CO 1 +NaHCO3 ·2H,0","en":"NRC16F1035 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1036","bn":"Sodium sulfate, Na2SO4","en":"NRC16F1036 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1037","bn":"Ammonium sulfate, (NH4),SO4","en":"NRC16F1037 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1038","bn":"Cobalt carbonate. CoCO3","en":"NRC16F1038 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1039","bn":"Cobalt carbonate hexahydrate. CoCO3 · 6H20","en":"NRC16F1039 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1040","bn":"Cobalt chloride hexahydrate, CoCl2 • 6H20","en":"NRC16F1040 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1041","bn":"Cobalt sulfate heptahydrate. CoSO4 • 7H20","en":"NRC16F1041 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1043","bn":"Copper chloride dihydrate, CuCl2 • 2H2O","en":"NRC16F1043 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1044","bn":"Copper sulfate pentahydrate, CuSO4 • 5H2O","en":"NRC16F1044 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1045","bn":"Copper oxide. CuO","en":"NRC16F1045 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1047","bn":"EDDI","en":"NRC16F1047 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1048","bn":"Calcium iodate, Ca(IO,)","en":"NRC16F1048 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1049","bn":"Ferrous sulfate heptahydrate, FeSO4 • 7H20","en":"NRC16F1049 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1050","bn":"Ferrous sulfate monohydrate. FeSO4 H2O","en":"NRC16F1050 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1051","bn":"Ferrous carbonate. FeCO3","en":"NRC16F1051 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1052","bn":"Iron oxide. FeO","en":"NRC16F1052 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1054","bn":"Manganese chloride. MnCl2","en":"NRC16F1054 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1055","bn":"Manganese chloride tetrahydrate, MnCl2- 4H2O","en":"NRC16F1055 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1056","bn":"Manganese carbonate. MnCO3","en":"NRC16F1056 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1057","bn":"Manganese sulfate monohydrate. MnSO4 • H2O","en":"NRC16F1057 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1058","bn":"Manganese sulfate pentah ydrate. MnSO4 · 5H2O","en":"NRC16F1058 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1059","bn":"Manganese oxide. MnO","en":"NRC16F1059 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1061","bn":"Selenite. sodium. Na2Se03","en":"NRC16F1061 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1062","bn":"Selenate, sodium decahydrate. Na2Se04 · IOH20","en":"NRC16F1062 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1064","bn":"Zinc carbonate, ZnCO3","en":"NRC16F1064 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1065","bn":"Z inc chloride. ZnCl2","en":"NRC16F1065 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1066","bn":"Zinc oxide. ZnO","en":"NRC16F1066 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1067","bn":"Zinc sulfate monohydmte, ZnSO4 • H2O","en":"NRC16F1067 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1069","bn":"Ammonium chloride. NH4Cl","en":"NRC16F1069 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
-    {"id":"NRC16F1070","bn":"Corn Grain Dry. Fine Grind","en":"NRC16F1070 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":86.9,"de":3.55,"nel":1.85,"cp":8.5,"ndf":9.8,"ca":0.04,"p":0.31},
-    {"id":"NRC16F1071","bn":"Corn Grain Dry. Coarse Grind","en":"NRC16F1071 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":86.9,"de":3.1,"nel":1.6,"cp":8.5,"ndf":9.8,"ca":0.04,"p":0.31},
-    {"id":"NRC16F1072","bn":"Corn Grain High Moisture, Coarse Grind","en":"NRC16F1072 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":72.3,"de":3.52,"nel":1.84,"cp":8.5,"ndf":9.6,"ca":0.04,"p":0.31},
-    {"id":"NRC16F1073","bn":"Sorghum Grain. Steam- Flaked","en":"NRC16F1073 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.9,"de":3.62,"nel":1.89,"cp":12.5,"ndf":6.1,"ca":0.1,"p":0.38},
-    {"id":"NRC16F1074","bn":"Barley Grain. Steam Rolled","en":"NRC16F1074 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.7,"de":3.44,"nel":1.79,"cp":11.8,"ndf":18.6,"ca":0.12,"p":0.38},
-    {"id":"NRC16F1075","bn":"Glycerol","en":"NRC16F1075 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":80.0,"de":3.29,"nel":1.71,"cp":0.8,"ndf":0.0,"ca":0.08,"p":0.19},
-    {"id":"NRC16F11023","bn":"Ammonium phosp hate (monobasic). ( N H4 )H 2 P 04","en":"NRC16F11023 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0}
+    {"id":"NRC16F1","bn":"আলফালফা খাবার (Alfalfa Meal)","en":"NRC16F1 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.7,"de":2.5,"nel":1.27,"cp":19.5,"ndf":42.9,"ca":1.5,"p":0.27},
+    {"id":"NRC16F4","bn":"বেকারির উপজাত খাবার","en":"NRC16F4 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.1,"de":3.6,"nel":1.88,"cp":12.8,"ndf":12.7,"ca":0.37,"p":0.35},
+    {"id":"NRC16F5","bn":"বেকারির রুটির অবশিষ্ট","en":"NRC16F5 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":67.4,"de":3.66,"nel":1.91,"cp":14.9,"ndf":6.3,"ca":0.22,"p":0.26},
+    {"id":"NRC16F6","bn":"বেকারির সিরিয়াল উপজাত","en":"NRC16F6 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":91.1,"de":3.44,"nel":1.79,"cp":9.2,"ndf":7.2,"ca":0.22,"p":0.28},
+    {"id":"NRC16F7","bn":"বেকারির কুকিজ উপজাত","en":"NRC16F7 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.3,"de":3.59,"nel":1.88,"cp":12.9,"ndf":14.4,"ca":0.24,"p":0.42},
+    {"id":"NRC16F8","bn":"যবের দানা, শুকনো, ভাঙা (Barley Grain)","en":"NRC16F8 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.7,"de":3.36,"nel":1.75,"cp":11.8,"ndf":18.6,"ca":0.12,"p":0.38},
+    {"id":"NRC16F10","bn":"যব মল্ট অঙ্কুর (Barley Malt Sprouts)","en":"NRC16F10 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":81.2,"de":3.13,"nel":1.62,"cp":23.9,"ndf":40.5,"ca":0.19,"p":0.61},
+    {"id":"NRC16F15","bn":"বিট পাল্প, শুকনো+গুড় (Beet Pulp+Molasses)","en":"NRC16F15 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.6,"de":2.74,"nel":1.4,"cp":8.9,"ndf":39.7,"ca":1.18,"p":0.09},
+    {"id":"NRC16F16","bn":"বিট পাল্প, ভেজা (Beet Pulp, Wet)","en":"NRC16F16 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":22.7,"de":2.73,"nel":1.4,"cp":9.1,"ndf":44.1,"ca":1.12,"p":0.13},
+    {"id":"NRC16F20","bn":"রক্তের খাবার, কম dRUP (Blood Meal)","en":"NRC16F20 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.9,"de":3.82,"nel":2.0,"cp":95.0,"ndf":0.0,"ca":0.13,"p":0.28},
+    {"id":"NRC16F21","bn":"ব্রিউয়ারি শস্য, শুকনো","en":"NRC16F21 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":93.1,"de":2.98,"nel":1.54,"cp":25.3,"ndf":51.8,"ca":0.3,"p":0.64},
+    {"id":"NRC16F22","bn":"ব্রিউয়ারি শস্য, ভেজা","en":"NRC16F22 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":22.5,"de":3.11,"nel":1.61,"cp":28.1,"ndf":49.3,"ca":0.36,"p":0.69},
+    {"id":"NRC16F23","bn":"ব্রিউয়ারি ইস্ট, শুকনো","en":"NRC16F23 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.8,"de":3.94,"nel":2.07,"cp":50.7,"ndf":1.6,"ca":0.12,"p":1.19},
+    {"id":"NRC16F24","bn":"ব্রিউয়ারি ইস্ট, ভেজা","en":"NRC16F24 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":13.4,"de":3.85,"nel":2.02,"cp":43.3,"ndf":11.5,"ca":0.37,"p":1.49},
+    {"id":"NRC16F25","bn":"ক্যালসিয়াম সাবান (Calcium Soaps)","en":"NRC16F25 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":95.3,"de":5.42,"nel":2.89,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F26","bn":"মিষ্টান্ন উপজাত (Candy By-product)","en":"NRC16F26 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.1,"de":3.48,"nel":1.81,"cp":2.4,"ndf":2.3,"ca":0.06,"p":0.03},
+    {"id":"NRC16F27","bn":"মিষ্টান্ন উপজাত, বেশি প্রোটিন","en":"NRC16F27 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.9,"de":3.31,"nel":1.72,"cp":14.6,"ndf":29.7,"ca":0.32,"p":0.49},
+    {"id":"NRC16F28","bn":"ক্যানোলা খাবার, দ্রাবক নিষ্কাশন","en":"NRC16F28 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.1,"de":3.14,"nel":1.63,"cp":41.5,"ndf":29.0,"ca":0.79,"p":1.15},
+    {"id":"NRC16F29","bn":"ক্যানোলা বীজ, ভাঙা","en":"NRC16F29 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":95.0,"de":4.31,"nel":2.28,"cp":23.4,"ndf":28.7,"ca":0.44,"p":0.69},
+    {"id":"NRC16F30","bn":"চকলেটের উপজাত (Chocolate By-product)","en":"NRC16F30 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":94.3,"de":4.05,"nel":2.13,"cp":10.0,"ndf":13.2,"ca":0.15,"p":0.28},
+    {"id":"NRC16F31","bn":"সাইট্রাস পাল্প, শুকনো","en":"NRC16F31 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.2,"de":3.02,"nel":1.56,"cp":7.2,"ndf":24.1,"ca":1.86,"p":0.12},
+    {"id":"NRC16F32","bn":"সাইট্রাস পাল্প, ভেজা","en":"NRC16F32 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":18.3,"de":2.97,"nel":1.53,"cp":8.7,"ndf":25.9,"ca":1.27,"p":0.16},
+    {"id":"NRC16F36","bn":"ভুট্টা ও মোচার খাবার, শুকনো","en":"NRC16F36 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":86.3,"de":3.35,"nel":1.74,"cp":8.4,"ndf":19.0,"ca":0.05,"p":0.29},
+    {"id":"NRC16F38","bn":"ভুট্টার জীবাণু (Corn Germ)","en":"NRC16F38 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.2,"de":3.63,"nel":1.9,"cp":15.4,"ndf":27.0,"ca":0.03,"p":1.17},
+    {"id":"NRC16F39","bn":"ভুট্টার জীবাণু খাবার (Corn Germ Meal)","en":"NRC16F39 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.2,"de":3.12,"nel":1.61,"cp":26.1,"ndf":44.8,"ca":0.04,"p":0.83},
+    {"id":"NRC16F40","bn":"ভুট্টা গ্লুটেন ফিড, শুকনো","en":"NRC16F40 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.2,"de":3.21,"nel":1.66,"cp":23.2,"ndf":35.7,"ca":0.07,"p":1.07},
+    {"id":"NRC16F41","bn":"ভুট্টা গ্লুটেন ফিড, ভেজা","en":"NRC16F41 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":45.6,"de":3.23,"nel":1.68,"cp":23.1,"ndf":36.9,"ca":0.1,"p":1.07},
+    {"id":"NRC16F42","bn":"ভুট্টা গ্লুটেন খাবার (Corn Gluten Meal)","en":"NRC16F42 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.5,"de":4.33,"nel":2.29,"cp":68.5,"ndf":6.8,"ca":0.04,"p":0.49},
+    {"id":"NRC16F43","bn":"ভুট্টার ছাঁটাই দানা (Corn Screenings)","en":"NRC16F43 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":86.9,"de":3.46,"nel":1.8,"cp":8.6,"ndf":11.7,"ca":0.18,"p":0.32},
+    {"id":"NRC16F44","bn":"ভুট্টা দানা শুকনো, মাঝারি ভাঙা","en":"NRC16F44 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":86.9,"de":3.46,"nel":1.8,"cp":8.5,"ndf":9.8,"ca":0.04,"p":0.31},
+    {"id":"NRC16F45","bn":"ভুট্টা দানা আর্দ্র, মিহি ভাঙা","en":"NRC16F45 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":72.3,"de":3.7,"nel":1.94,"cp":8.5,"ndf":9.6,"ca":0.04,"p":0.31},
+    {"id":"NRC16F46","bn":"ভুট্টা দানা, স্টিম ফ্লেকড (Corn)","en":"NRC16F46 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":85.7,"de":3.63,"nel":1.9,"cp":8.0,"ndf":8.6,"ca":0.06,"p":0.24},
+    {"id":"NRC16F47","bn":"ভুট্টা হোমিনি (Corn Hominy)","en":"NRC16F47 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.1,"de":3.5,"nel":1.83,"cp":10.1,"ndf":16.9,"ca":0.06,"p":0.52},
+    {"id":"NRC16F58","bn":"তুলাবীজের খাবার (Cottonseed Meal)","en":"NRC16F58 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.9,"de":3.32,"nel":1.73,"cp":46.7,"ndf":28.1,"ca":0.25,"p":1.31},
+    {"id":"NRC16F59","bn":"ডিস্টিলার শস্য শুকনো, বেশি চর্বি (DDGS)","en":"NRC16F59 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.1,"de":3.49,"nel":1.82,"cp":30.2,"ndf":32.1,"ca":0.12,"p":0.88},
+    {"id":"NRC16F60","bn":"ডিস্টিলার শস্য শুকনো, বেশি প্রোটিন","en":"NRC16F60 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.0,"de":3.34,"nel":1.74,"cp":39.0,"ndf":37.6,"ca":0.08,"p":0.64},
+    {"id":"NRC16F61","bn":"ডিস্টিলার শস্য শুকনো, কম চর্বি","en":"NRC16F61 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":3.44,"nel":1.79,"cp":31.0,"ndf":30.8,"ca":0.11,"p":0.89},
+    {"id":"NRC16F62","bn":"ডিস্টিলার শস্য পরিবর্তিত ভেজা","en":"NRC16F62 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":25.0,"de":3.5,"nel":1.83,"cp":30.3,"ndf":27.1,"ca":0.21,"p":0.86},
+    {"id":"NRC16F63","bn":"ডিস্টিলার শস্য ভেজা (WDGS)","en":"NRC16F63 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":25.0,"de":3.5,"nel":1.83,"cp":31.5,"ndf":31.7,"ca":0.13,"p":0.76},
+    {"id":"NRC16F64","bn":"ডিস্টিলার দ্রবণীয় পদার্থ","en":"NRC16F64 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":31.2,"de":3.62,"nel":1.89,"cp":22.6,"ndf":4.8,"ca":0.13,"p":1.82},
+    {"id":"NRC16F65","bn":"তেল, ক্যানোলা (Canola Oil)","en":"NRC16F65 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F66","bn":"তেল, ভুট্টার (Corn Oil)","en":"NRC16F66 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F67","bn":"তেল, তুলাবীজের (Cottonseed Oil)","en":"NRC16F67 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F68","bn":"চর্বি, লার্ড (Lard)","en":"NRC16F68 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":5.8,"nel":3.1,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F69","bn":"তেল, তিসির (Flaxseed Oil)","en":"NRC16F69 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F70","bn":"তেল, কুসুম (Safflower Oil)","en":"NRC16F70 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F71","bn":"তেল, সয়াবিন (Soybean Oil)","en":"NRC16F71 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F72","bn":"তেল, সূর্যমুখী (Sunflower Oil)","en":"NRC16F72 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":6.22,"nel":3.34,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F73","bn":"চর্বি, ট্যালো (Tallow)","en":"NRC16F73 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.8,"de":5.8,"nel":3.1,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F74","bn":"পালকের খাবার (Feather Meal)","en":"NRC16F74 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.9,"de":4.12,"nel":2.17,"cp":90.6,"ndf":0.0,"ca":0.5,"p":0.32},
+    {"id":"NRC16F75","bn":"মাছের খাবার (Fish Meal)","en":"NRC16F75 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.0,"de":3.63,"nel":1.9,"cp":69.2,"ndf":0.0,"ca":5.56,"p":3.16},
+    {"id":"NRC16F77","bn":"ফল ও সবজির উপজাত, ভেজা","en":"NRC16F77 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":19.8,"de":3.04,"nel":1.57,"cp":13.6,"ndf":28.7,"ca":0.72,"p":0.34},
+    {"id":"NRC16F79","bn":"শস্য ছাঁটাই অবশিষ্ট","en":"NRC16F79 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.2,"de":3.03,"nel":1.56,"cp":16.2,"ndf":34.1,"ca":0.26,"p":0.66},
+    {"id":"NRC16F96","bn":"তিসি বীজ (Flaxseed)","en":"NRC16F96 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.7,"de":4.1,"nel":2.16,"cp":22.8,"ndf":30.4,"ca":0.24,"p":0.59},
+    {"id":"NRC16F97","bn":"তিসির খাবার (Flaxseed Meal)","en":"NRC16F97 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.6,"de":3.24,"nel":1.68,"cp":38.5,"ndf":30.4,"ca":0.44,"p":0.95},
+    {"id":"NRC16F98","bn":"মাংস ও হাড়ের খাবার (Meat & Bone Meal)","en":"NRC16F98 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":96.1,"de":3.25,"nel":1.69,"cp":56.6,"ndf":0.0,"ca":9.29,"p":4.59},
+    {"id":"NRC16F101","bn":"গুড়/মোলাসেস (Molasses)","en":"NRC16F101 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":65.4,"de":3.07,"nel":1.59,"cp":9.3,"ndf":0.6,"ca":0.73,"p":0.26},
+    {"id":"NRC16F102","bn":"ওট দানা, রোলড (Oat Grain)","en":"NRC16F102 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.3,"de":3.27,"nel":1.7,"cp":12.2,"ndf":28.6,"ca":0.13,"p":0.38},
+    {"id":"NRC16F111","bn":"চিনাবাদাম খাবার, এক্সপেলার","en":"NRC16F111 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":94.0,"de":3.73,"nel":1.95,"cp":42.6,"ndf":22.9,"ca":0.35,"p":0.57},
+    {"id":"NRC16F113","bn":"চিনাবাদাম (Peanuts)","en":"NRC16F113 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":94.1,"de":4.6,"nel":2.44,"cp":25.6,"ndf":0.0,"ca":0.09,"p":0.0},
+    {"id":"NRC16F114","bn":"মটরশুঁটি দানা (Peas)","en":"NRC16F114 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.9,"de":3.67,"nel":1.92,"cp":24.3,"ndf":0.0,"ca":0.11,"p":0.0},
+    {"id":"NRC16F115","bn":"আনারসের অবশিষ্ট (Pineapple Waste)","en":"NRC16F115 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":23.4,"de":2.42,"nel":1.23,"cp":7.0,"ndf":0.0,"ca":0.43,"p":0.0},
+    {"id":"NRC16F116","bn":"আলুর উপজাত খাবার","en":"NRC16F116 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":23.0,"de":3.16,"nel":1.64,"cp":10.0,"ndf":0.0,"ca":0.17,"p":0.0},
+    {"id":"NRC16F117","bn":"পোল্ট্রি উপজাত খাবার","en":"NRC16F117 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":95.5,"de":4.25,"nel":2.24,"cp":65.6,"ndf":0.0,"ca":4.31,"p":2.48},
+    {"id":"NRC16F118","bn":"চালের কুঁড়া (Rice Bran)","en":"NRC16F118 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.4,"de":3.22,"nel":1.67,"cp":14.8,"ndf":23.1,"ca":0.78,"p":1.77},
+    {"id":"NRC16F119","bn":"চালের কুঁড়া, ডিফ্যাটেড","en":"NRC16F119 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.5,"de":2.85,"nel":1.46,"cp":18.5,"ndf":25.9,"ca":0.83,"p":2.48},
+    {"id":"NRC16F121","bn":"ধানের সাইলেজ, শীষসহ","en":"NRC16F121 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":41.1,"de":2.49,"nel":1.26,"cp":7.1,"ndf":41.9,"ca":0.21,"p":0.23},
+    {"id":"NRC16F123","bn":"চালের দানা (Rice Grain)","en":"NRC16F123 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":87.9,"de":3.48,"nel":1.81,"cp":8.1,"ndf":6.4,"ca":0.02,"p":0.26},
+    {"id":"NRC16F124","bn":"রাই তাজা, কাঁচা","en":"NRC16F124 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":15.8,"de":2.94,"nel":1.51,"cp":27.5,"ndf":42.9,"ca":0.48,"p":0.49},
+    {"id":"NRC16F132","bn":"রাই দানা (Rye Grain)","en":"NRC16F132 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":86.0,"de":3.41,"nel":1.78,"cp":11.8,"ndf":16.0,"ca":0.25,"p":0.38},
+    {"id":"NRC16F133","bn":"কুসুম খাবার (Safflower Meal)","en":"NRC16F133 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":94.0,"de":2.51,"nel":1.28,"cp":26.2,"ndf":55.4,"ca":0.32,"p":0.65},
+    {"id":"NRC16F134","bn":"সয়াবিন খাবার, দ্রাবক ৪৮% CP (SBM)","en":"NRC16F134 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.3,"de":3.99,"nel":2.1,"cp":52.6,"ndf":11.1,"ca":0.4,"p":0.74},
+    {"id":"NRC16F137","bn":"জোয়ার দানা, ভাঙা (Sorghum Grain)","en":"NRC16F137 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.9,"de":3.29,"nel":1.71,"cp":12.5,"ndf":6.1,"ca":0.1,"p":0.38},
+    {"id":"NRC16F145","bn":"সয়াবিন খাবার, এক্সপেলার","en":"NRC16F145 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":91.2,"de":3.9,"nel":2.05,"cp":47.6,"ndf":19.6,"ca":0.34,"p":0.72},
+    {"id":"NRC16F146","bn":"সয়াবিন খাবার, এক্সট্রুডেড","en":"NRC16F146 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":93.4,"de":4.16,"nel":2.19,"cp":40.4,"ndf":18.4,"ca":0.27,"p":0.63},
+    {"id":"NRC16F148","bn":"সয়াবিন, পুরো কাঁচা (Whole Raw)","en":"NRC16F148 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":89.1,"de":4.33,"nel":2.29,"cp":40.0,"ndf":11.9,"ca":0.27,"p":0.65},
+    {"id":"NRC16F149","bn":"সয়াবিন, পুরো ভাজা (Whole Roasted)","en":"NRC16F149 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":94.0,"de":4.16,"nel":2.19,"cp":40.0,"ndf":18.4,"ca":0.28,"p":0.63},
+    {"id":"NRC16F150","bn":"স্পেল্ট দানা (Spelt Grain)","en":"NRC16F150 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":87.4,"de":3.0,"nel":1.55,"cp":12.9,"ndf":39.3,"ca":0.09,"p":0.38},
+    {"id":"NRC16F157","bn":"সূর্যমুখী খাবার (Sunflower Meal)","en":"NRC16F157 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.2,"de":2.99,"nel":1.54,"cp":37.0,"ndf":40.2,"ca":0.46,"p":1.13},
+    {"id":"NRC16F158","bn":"সূর্যমুখী বীজ (Sunflower Seed)","en":"NRC16F158 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.7,"de":4.16,"nel":2.19,"cp":20.1,"ndf":35.2,"ca":0.2,"p":0.73},
+    {"id":"NRC16F161","bn":"ট্যাপিওকা/কাসাভা (Tapioca)","en":"NRC16F161 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":87.7,"de":3.27,"nel":1.7,"cp":2.5,"ndf":8.1,"ca":0.18,"p":0.09},
+    {"id":"NRC16F163","bn":"ট্রিটিকেল দানা (Triticale Grain)","en":"NRC16F163 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.4,"de":3.44,"nel":1.79,"cp":12.1,"ndf":14.1,"ca":0.09,"p":0.35},
+    {"id":"NRC16F168","bn":"ইউরিয়া (Urea)","en":"NRC16F168 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":99.0,"de":2.21,"nel":1.11,"cp":281.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F169","bn":"গমের ভুসি (Wheat Bran)","en":"NRC16F169 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.1,"de":3.06,"nel":1.58,"cp":17.4,"ndf":40.1,"ca":0.13,"p":1.05},
+    {"id":"NRC16F170","bn":"গমের দানা, ভাঙা (Wheat Grain)","en":"NRC16F170 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":85.7,"de":3.56,"nel":1.86,"cp":13.5,"ndf":12.5,"ca":0.1,"p":0.36},
+    {"id":"NRC16F173","bn":"গমের মিডলিং (Wheat Middlings)","en":"NRC16F173 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.3,"de":3.07,"nel":1.59,"cp":19.1,"ndf":38.7,"ca":0.14,"p":1.21},
+    {"id":"NRC16F177","bn":"হোয়ে/মাঠা, শুকনো (Whey, Dry)","en":"NRC16F177 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":92.6,"de":3.62,"nel":1.89,"cp":17.8,"ndf":0.6,"ca":0.92,"p":0.89},
+    {"id":"NRC16F178","bn":"হোয়ে/মাঠা, ভেজা (Whey, Wet)","en":"NRC16F178 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":22.9,"de":3.16,"nel":1.64,"cp":7.4,"ndf":2.2,"ca":1.26,"p":1.29},
+    {"id":"NRC16F1000","bn":"রক্তের খাবার, বেশি dRUP","en":"NRC16F1000 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":90.9,"de":4.56,"nel":2.42,"cp":95.0,"ndf":0.0,"ca":0.13,"p":0.28},
+    {"id":"NRC16F1001","bn":"রুমেন-সুরক্ষিত মিথিওনিন (RPM)","en":"NRC16F1001 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":98.0,"de":0.0,"nel":0.0,"cp":75.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1002","bn":"রুমেন-সুরক্ষিত লাইসিন (RPL)","en":"NRC16F1002 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":98.0,"de":0.0,"nel":0.0,"cp":75.0,"ndf":0.0,"ca":7.0,"p":7.0},
+    {"id":"NRC16F1003","bn":"ক্যালসিয়াম কার্বনেট, CaCO₃","en":"NRC16F1003 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":39.4,"p":0.0},
+    {"id":"NRC16F1004","bn":"ক্যালসিয়াম ক্লোরাইড, CaCl₂","en":"NRC16F1004 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":36.1,"p":0.0},
+    {"id":"NRC16F1005","bn":"ক্যালসিয়াম ক্লোরাইড ডাইহাইড্রেট","en":"NRC16F1005 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":27.5,"p":0.0},
+    {"id":"NRC16F1006","bn":"ক্যালসিয়াম হাইড্রক্সাইড","en":"NRC16F1006 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":54.1,"p":0.0},
+    {"id":"NRC16F1007","bn":"ডাইক্যালসিয়াম ফসফেট (DCP)","en":"NRC16F1007 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":22.0,"p":19.3},
+    {"id":"NRC16F1008","bn":"মনোক্যালসিয়াম ফসফেট (MCP)","en":"NRC16F1008 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":16.4,"p":21.6},
+    {"id":"NRC16F1009","bn":"ক্যালসিয়াম অক্সাইড, CaO","en":"NRC16F1009 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":71.5,"p":0.0},
+    {"id":"NRC16F1010","bn":"ক্যালসিয়াম সালফেট ডাইহাইড্রেট","en":"NRC16F1010 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":23.3,"p":0.0},
+    {"id":"NRC16F1011","bn":"হাড়ের গুঁড়া (Bone Meal)","en":"NRC16F1011 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":31.0,"p":12.9},
+    {"id":"NRC16F1012","bn":"ডলোমাইট চুনাপাথর (Dolomite)","en":"NRC16F1012 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":22.3,"p":0.0},
+    {"id":"NRC16F1013","bn":"চুনাপাথর, গুঁড়া (Limestone)","en":"NRC16F1013 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":35.0,"p":0.0},
+    {"id":"NRC16F1014","bn":"ঝিনুকের খোল, গুঁড়া (Oystershell)","en":"NRC16F1014 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":38.0,"p":0.0},
+    {"id":"NRC16F1015","bn":"ম্যাগনেসিয়াম ক্লোরাইড","en":"NRC16F1015 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1016","bn":"পটাসিয়াম ক্লোরাইড, KCl","en":"NRC16F1016 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1017","bn":"সোডিয়াম ক্লোরাইড/লবণ, NaCl","en":"NRC16F1017 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1018","bn":"ম্যাগনেসিয়াম কার্বনেট","en":"NRC16F1018 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1019","bn":"ম্যাগনেসিয়াম হাইড্রক্সাইড","en":"NRC16F1019 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1020","bn":"ম্যাগনেসিয়াম অক্সাইড, MgO","en":"NRC16F1020 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":10.45,"p":0.0},
+    {"id":"NRC16F1021","bn":"ম্যাগনেসিয়াম সালফেট","en":"NRC16F1021 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1022","bn":"অ্যামোনিয়াম ফসফেট ডাইবেসিক","en":"NRC16F1022 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":20.6},
+    {"id":"NRC16F1023","bn":"অ্যামোনিয়াম ফসফেট মনোবেসিক","en":"NRC16F1023 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":24.7},
+    {"id":"NRC16F1024","bn":"ফসফেট, কিউরাসাও","en":"NRC16F1024 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":35.1,"p":14.1},
+    {"id":"NRC16F1025","bn":"ফসফেট, ডিফ্লুওরিনেটেড","en":"NRC16F1025 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":32.0,"p":18.0},
+    {"id":"NRC16F1026","bn":"মনোসোডিয়াম ফসফেট","en":"NRC16F1026 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":22.5},
+    {"id":"NRC16F1027","bn":"ফসফরিক এসিড","en":"NRC16F1027 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":75.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":31.6},
+    {"id":"NRC16F1028","bn":"সোডিয়াম ট্রাইপলিফসফেট","en":"NRC16F1028 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":25.0},
+    {"id":"NRC16F1029","bn":"পটাসিয়াম বাইকার্বনেট","en":"NRC16F1029 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1030","bn":"পটাসিয়াম কার্বনেট","en":"NRC16F1030 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1031","bn":"পটাসিয়াম আয়োডাইড, KI","en":"NRC16F1031 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1032","bn":"পটাসিয়াম সালফেট","en":"NRC16F1032 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1033","bn":"সোডিয়াম বাইকার্বনেট, NaHCO₃","en":"NRC16F1033 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1034","bn":"সোডিয়াম কার্বনেট মনোহাইড্রেট","en":"NRC16F1034 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1035","bn":"সোডিয়াম সেসকুইকার্বনেট","en":"NRC16F1035 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1036","bn":"সোডিয়াম সালফেট","en":"NRC16F1036 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1037","bn":"অ্যামোনিয়াম সালফেট","en":"NRC16F1037 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1038","bn":"কোবাল্ট কার্বনেট","en":"NRC16F1038 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1039","bn":"কোবাল্ট কার্বনেট হেক্সাহাইড্রেট","en":"NRC16F1039 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1040","bn":"কোবাল্ট ক্লোরাইড হেক্সাহাইড্রেট","en":"NRC16F1040 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1041","bn":"কোবাল্ট সালফেট হেপ্টাহাইড্রেট","en":"NRC16F1041 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1043","bn":"কপার ক্লোরাইড ডাইহাইড্রেট","en":"NRC16F1043 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1044","bn":"কপার সালফেট পেন্টাহাইড্রেট","en":"NRC16F1044 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1045","bn":"কপার অক্সাইড, CuO","en":"NRC16F1045 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1047","bn":"EDDI (ইথিলেনডায়ামিন ডাইহাইড্রোআয়োডাইড)","en":"NRC16F1047 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1048","bn":"ক্যালসিয়াম আয়োডেট","en":"NRC16F1048 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1049","bn":"ফেরাস সালফেট হেপ্টাহাইড্রেট","en":"NRC16F1049 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1050","bn":"ফেরাস সালফেট মনোহাইড্রেট","en":"NRC16F1050 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1051","bn":"ফেরাস কার্বনেট","en":"NRC16F1051 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1052","bn":"আয়রন অক্সাইড, FeO","en":"NRC16F1052 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1054","bn":"ম্যাঙ্গানিজ ক্লোরাইড","en":"NRC16F1054 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1055","bn":"ম্যাঙ্গানিজ ক্লোরাইড টেট্রাহাইড্রেট","en":"NRC16F1055 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1056","bn":"ম্যাঙ্গানিজ কার্বনেট","en":"NRC16F1056 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1057","bn":"ম্যাঙ্গানিজ সালফেট মনোহাইড্রেট","en":"NRC16F1057 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1058","bn":"ম্যাঙ্গানিজ সালফেট পেন্টাহাইড্রেট","en":"NRC16F1058 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1059","bn":"ম্যাঙ্গানিজ অক্সাইড, MnO","en":"NRC16F1059 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1061","bn":"সোডিয়াম সেলেনাইট","en":"NRC16F1061 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1062","bn":"সোডিয়াম সেলেনেট ডেকাহাইড্রেট","en":"NRC16F1062 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1064","bn":"জিংক কার্বনেট, ZnCO₃","en":"NRC16F1064 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1065","bn":"জিংক ক্লোরাইড, ZnCl₂","en":"NRC16F1065 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1066","bn":"জিংক অক্সাইড, ZnO","en":"NRC16F1066 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1067","bn":"জিংক সালফেট মনোহাইড্রেট","en":"NRC16F1067 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1069","bn":"অ্যামোনিয়াম ক্লোরাইড, NH₄Cl","en":"NRC16F1069 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"NRC16F1070","bn":"ভুট্টা দানা শুকনো, মিহি ভাঙা","en":"NRC16F1070 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":86.9,"de":3.55,"nel":1.85,"cp":8.5,"ndf":9.8,"ca":0.04,"p":0.31},
+    {"id":"NRC16F1071","bn":"ভুট্টা দানা শুকনো, মোটা ভাঙা","en":"NRC16F1071 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":86.9,"de":3.1,"nel":1.6,"cp":8.5,"ndf":9.8,"ca":0.04,"p":0.31},
+    {"id":"NRC16F1072","bn":"ভুট্টা দানা আর্দ্র, মোটা ভাঙা","en":"NRC16F1072 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":72.3,"de":3.52,"nel":1.84,"cp":8.5,"ndf":9.6,"ca":0.04,"p":0.31},
+    {"id":"NRC16F1073","bn":"জোয়ার দানা, স্টিম ফ্লেকড","en":"NRC16F1073 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.9,"de":3.62,"nel":1.89,"cp":12.5,"ndf":6.1,"ca":0.1,"p":0.38},
+    {"id":"NRC16F1074","bn":"যব দানা, স্টিম রোলড","en":"NRC16F1074 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":88.7,"de":3.44,"nel":1.79,"cp":11.8,"ndf":18.6,"ca":0.12,"p":0.38},
+    {"id":"NRC16F1075","bn":"গ্লিসারল (Glycerol)","en":"NRC16F1075 | NRC 2021 Table 19-1","cat":"Concentrate/by-product","dm":80.0,"de":3.29,"nel":1.71,"cp":0.8,"ndf":0.0,"ca":0.08,"p":0.19},
+    {"id":"NRC16F11023","bn":"অ্যামোনিয়াম ফসফেট মনোবেসিক","en":"NRC16F11023 | NRC 2021 Table 19-3","cat":"Vitamin/mineral","dm":100.0,"de":0.0,"nel":0.0,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    // ===== বাংলাদেশ প্রচলিত কনসেন্ট্রেট / BD Common Concentrates =====
+    {"id":"BD_C001","bn":"সরিষার খৈল (Mustard Oil Cake)","en":"BD_C001 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":90.0,"de":3.10,"nel":1.60,"cp":36.0,"ndf":22.0,"ca":0.55,"p":1.10},
+    {"id":"BD_C002","bn":"নারকেলের খৈল (Coconut Oil Cake)","en":"BD_C002 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":89.0,"de":3.05,"nel":1.57,"cp":22.0,"ndf":32.0,"ca":0.22,"p":0.60},
+    {"id":"BD_C003","bn":"তিলের খৈল (Sesame/Til Oil Cake)","en":"BD_C003 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":91.0,"de":3.20,"nel":1.66,"cp":38.0,"ndf":18.0,"ca":2.00,"p":1.30},
+    {"id":"BD_C004","bn":"চিনাবাদামের খৈল (Groundnut Oil Cake)","en":"BD_C004 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":90.0,"de":3.50,"nel":1.82,"cp":45.0,"ndf":20.0,"ca":0.30,"p":0.65},
+    {"id":"BD_C005","bn":"খেসারি ডালের খৈল (Khesari/Lathyrus Cake)","en":"BD_C005 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":88.0,"de":2.85,"nel":1.46,"cp":28.0,"ndf":30.0,"ca":0.80,"p":0.50},
+    {"id":"BD_C006","bn":"ভুট্টার গুঁড়া/আটা (Maize/Corn Flour, Local)","en":"BD_C006 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":87.0,"de":3.45,"nel":1.80,"cp":8.5,"ndf":9.5,"ca":0.04,"p":0.30},
+    {"id":"BD_C007","bn":"চালের খুদ (Broken Rice)","en":"BD_C007 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":88.0,"de":3.45,"nel":1.80,"cp":7.5,"ndf":5.0,"ca":0.02,"p":0.24},
+    {"id":"BD_C008","bn":"গমের ভুসি স্থানীয় (Wheat Bran, Local)","en":"BD_C008 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":88.0,"de":3.05,"nel":1.57,"cp":16.0,"ndf":40.0,"ca":0.12,"p":1.00},
+    {"id":"BD_C009","bn":"চালের কুঁড়া ডিফ্যাটেড (Rice Polish, Defatted)","en":"BD_C009 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":89.0,"de":2.88,"nel":1.48,"cp":17.0,"ndf":26.0,"ca":0.80,"p":2.30},
+    {"id":"BD_C010","bn":"মাছের গুঁড়া স্থানীয় (Fish Meal, Local)","en":"BD_C010 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":88.0,"de":3.20,"nel":1.65,"cp":55.0,"ndf":0.0,"ca":4.50,"p":2.80},
+    {"id":"BD_C011","bn":"সয়াবিন খাবার ৪৪% (Soybean Meal 44% CP)","en":"BD_C011 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":89.0,"de":3.85,"nel":2.02,"cp":44.0,"ndf":14.0,"ca":0.37,"p":0.65},
+    {"id":"BD_C012","bn":"ডেইরি কনসেন্ট্রেট মিশ্র (Dairy Concentrate Mix)","en":"BD_C012 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":88.0,"de":3.20,"nel":1.65,"cp":18.0,"ndf":25.0,"ca":0.80,"p":0.60},
+    {"id":"BD_C013","bn":"চালের পলিশ (Rice Polish)","en":"BD_C013 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":90.0,"de":3.38,"nel":1.76,"cp":12.5,"ndf":20.0,"ca":0.06,"p":1.50},
+    {"id":"BD_C014","bn":"হাঁস-মুরগির বিষ্ঠা, প্রক্রিয়াজাত (Poultry Litter, Processed)","en":"BD_C014 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":88.0,"de":2.20,"nel":1.10,"cp":28.0,"ndf":25.0,"ca":2.80,"p":1.80},
+    {"id":"BD_C015","bn":"নারকেল/কপরা খাবার (Copra Meal)","en":"BD_C015 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":90.0,"de":2.95,"nel":1.52,"cp":20.0,"ndf":38.0,"ca":0.20,"p":0.62},
+    {"id":"BD_C016","bn":"সরিষার তেল (Mustard Oil)","en":"BD_C016 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":99.0,"de":6.20,"nel":3.32,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0},
+    {"id":"BD_C017","bn":"চালের তুষের তেল (Rice Bran Oil)","en":"BD_C017 | বাংলাদেশ প্রচলিত","cat":"Concentrate/by-product","dm":99.0,"de":6.20,"nel":3.32,"cp":0.0,"ndf":0.0,"ca":0.0,"p":0.0}
   ]
 };
 
@@ -1096,7 +1192,7 @@ function initDefaultRation() {
 // ======================================================
 function showTab(name) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    const tabs = ['roughage','concentrate','custom','summary'];
+    const tabs = ['roughage','concentrate','custom','summary','batch'];
     t.classList.toggle('active', tabs[i] === name);
   });
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -1885,6 +1981,751 @@ function renderSummary() {
 // STARTUP
 // ======================================================
 initDefaultRation();
+
+// ======================================================
+// RATION RECOMMENDATION (NRC 2021 based)
+// ======================================================
+function calcRationRecommendation() {
+  const BW      = parseFloat(document.getElementById('bw').value) || 450;
+  const MY      = parseFloat(document.getElementById('milk_yield').value) || 0;
+  const MF      = parseFloat(document.getElementById('milk_fat').value) / 100 || 0.035;
+  const MCP_pct = parseFloat(document.getElementById('milk_cp').value) / 100 || 0.032;
+  const ML      = parseFloat(document.getElementById('milk_lactose').value) / 100 || 0.0485;
+  const DIM     = parseFloat(document.getElementById('dim').value) || 90;
+  const BCS     = parseFloat(document.getElementById('bcs').value) || 3.0;
+  const parity  = parseInt(document.getElementById('parity').value) || 2;
+  const airTemp = parseFloat(document.getElementById('air_temp').value) || 22;
+  const par01   = (parity <= 1) ? 0 : 1;
+
+  const NEL_milk = 9.29 * MF + 5.5 * MCP_pct + 3.95 * ML;
+  const MilkE    = NEL_milk * MY;
+
+  // Eq 2-1 DMI
+  const dimAdj = 1 - (0.212 + par01 * 0.136) * Math.exp(-0.053 * DIM);
+  let DMI = (3.7 + par01 * 5.7) + 0.305 * MilkE + 0.022 * BW
+          + (-0.689 - 1.87 * par01) * BCS * dimAdj;
+  DMI = Math.max(2.0, DMI);
+  if (airTemp > 25) DMI = Math.max(1.5, DMI - 0.85 * Math.min(airTemp - 25, 7));
+
+  // NRC 2021 guidelines for roughage:concentrate ratio
+  // High producers: 45:55 to 50:50
+  // Mid producers:  55:45 to 60:40
+  // Low producers:  65:35 to 70:30
+  let roughPct, concPct, rationClass, rationColor, rationNote;
+
+  if (MY >= 25) {
+    roughPct = 45; concPct = 55;
+    rationClass = 'উচ্চ উৎপাদনশীল'; rationColor = '#7c3aed';
+    rationNote = 'উচ্চ NEL ঘনত্ব প্রয়োজন। কনসেন্ট্রেট বেশি রাখুন, তবে ন্যূনতম ৩৫% DM আঁশ নিশ্চিত করুন।';
+  } else if (MY >= 15) {
+    roughPct = 55; concPct = 45;
+    rationClass = 'মধ্যম উৎপাদনশীল'; rationColor = '#1a7a4f';
+    rationNote = 'সুষম রেশন। আঁশ ও কনসেন্ট্রেটের ভারসাম্য বজায় রাখুন।';
+  } else if (MY >= 8) {
+    roughPct = 65; concPct = 35;
+    rationClass = 'কম উৎপাদনশীল'; rationColor = '#c57a17';
+    rationNote = 'আঁশ বেশি, কনসেন্ট্রেট কম। খরচ সাশ্রয়ী রেশন।';
+  } else {
+    roughPct = 75; concPct = 25;
+    rationClass = 'রক্ষণাবেক্ষণ পর্যায়'; rationColor = '#64748b';
+    rationNote = 'শুকনো বা গর্ভবতী গাভী। প্রধানত আঁশ ও ন্যূনতম কনসেন্ট্রেট।';
+  }
+
+  // Heat stress: reduce roughage slightly (heat increases from fiber fermentation)
+  if (airTemp > 28) {
+    roughPct = Math.max(roughPct - 5, 35);
+    concPct  = Math.min(concPct + 5, 65);
+  }
+
+  // NDF target: NRC 2021 min 25-28% DM for lactating, max 40% 
+  const ndfMinPct = MY > 15 ? 25 : 28;
+  const ndfMaxPct = 40;
+
+  // Calculate kg estimates
+  const roughDM = DMI * roughPct / 100;
+  const concDM  = DMI * concPct / 100;
+  // Assume avg DM for roughage ~25% fresh (mix), concentrate ~89%
+  const roughFresh = roughDM / 0.30;
+  const concFresh  = concDM / 0.89;
+
+  // Render
+  const box = document.getElementById('ration-rec-content');
+  box.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0;">
+      <div style="background:linear-gradient(135deg,rgba(26,122,79,0.12),rgba(26,122,79,0.05));border:2px solid rgba(26,122,79,0.35);border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:0.72rem;color:var(--text2);margin-bottom:4px;">🌿 আঁশ (Roughage) — DM ভিত্তিক</div>
+        <div style="font-size:2.2rem;font-weight:800;color:#1a7a4f;font-family:'IBM Plex Mono';">${roughPct}%</div>
+        <div style="font-size:0.85rem;color:#1a7a4f;font-weight:700;">${roughDM.toFixed(1)} কেজি DM/দিন</div>
+        <div style="font-size:0.7rem;color:var(--text2);">≈ ${roughFresh.toFixed(1)} কেজি তাজা/দিন</div>
+      </div>
+      <div style="background:linear-gradient(135deg,rgba(124,58,237,0.12),rgba(124,58,237,0.05));border:2px solid rgba(124,58,237,0.35);border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:0.72rem;color:var(--text2);margin-bottom:4px;">🌾 কনসেন্ট্রেট (Concentrate) — DM ভিত্তিক</div>
+        <div style="font-size:2.2rem;font-weight:800;color:#7c3aed;font-family:'IBM Plex Mono';">${concPct}%</div>
+        <div style="font-size:0.85rem;color:#7c3aed;font-weight:700;">${concDM.toFixed(1)} কেজি DM/দিন</div>
+        <div style="font-size:0.7rem;color:var(--text2);">≈ ${concFresh.toFixed(1)} কেজি তাজা/দিন</div>
+      </div>
+    </div>
+    <div style="background:linear-gradient(135deg,rgba(${rationColor==='#7c3aed'?'124,58,237':'26,122,79'},0.08),transparent);border:1.5px solid ${rationColor};border-radius:8px;padding:12px 14px;margin-bottom:10px;">
+      <div style="font-size:0.78rem;font-weight:700;color:${rationColor};margin-bottom:6px;">
+        🐄 শ্রেণি: ${rationClass} | দুধ: ${MY} কেজি/দিন | DMI: ${DMI.toFixed(1)} কেজি/দিন
+      </div>
+      <div style="font-size:0.74rem;color:var(--text);line-height:1.7;">
+        📌 ${rationNote}<br>
+        📌 NDF সুপারিশ: ন্যূনতম <b>${ndfMinPct}%</b>, সর্বোচ্চ <b>${ndfMaxPct}%</b> DM<br>
+        📌 আঁশ:কনসেন্ট্রেট = <b style="color:${rationColor}">${roughPct}:${concPct}</b> (DM ভিত্তিক, NRC 2021)
+        ${airTemp > 28 ? '<br>🌡️ <b>তাপ চাপ সমন্বয়:</b> আঁশ ৫% কমানো হয়েছে (রুমেন তাপ কমাতে)' : ''}
+      </div>
+    </div>
+    <div style="background:rgba(37,99,235,0.07);border:1px solid rgba(37,99,235,0.2);border-radius:8px;padding:10px 14px;font-size:0.72rem;color:var(--text2);line-height:1.7;">
+      <b style="color:var(--accent2);">NRC 2021 ভিত্তিক সূত্র:</b><br>
+      • DMI Eq 2-1: পার্টি, BCS, DIM, দুধ শক্তি ও BW ব্যবহার করে গণনা<br>
+      • Roughage:Conc অনুপাত: দুধ উৎপাদন, NDF প্রয়োজন ও রুমেন স্বাস্থ্যের ভিত্তিতে<br>
+      • সুপারিশ: আঁশের DM শতাংশ ≥ NDF ন্যূনতম (${ndfMinPct}%) নিশ্চিত করুন
+    </div>
+  `;
+  document.getElementById('ration-rec-box').style.display = 'block';
+}
+
+// Auto-update recommendation when any animal parameter changes
+(function() {
+  const fields = ['bw','bcs','milk_yield','milk_fat','milk_cp','milk_lactose',
+                  'dim','bw_change','parity','air_temp','breed','animal_type'];
+  function trigger() {
+    try { calcRationRecommendation(); } catch(e) {}
+  }
+  window.addEventListener('DOMContentLoaded', () => {
+    fields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.addEventListener('input', trigger); el.addEventListener('change', trigger); }
+    });
+    setTimeout(trigger, 300);
+  });
+})();
+
+// ======================================================
+// BATCH CALCULATOR
+// ======================================================
+function setBatchKg(kg) {
+  document.getElementById('batch_custom_kg').value = kg;
+  calcBatch();
+}
+
+function calcBatch() {
+  const animals   = parseFloat(document.getElementById('batch_animals').value) || 1;
+  const days      = parseFloat(document.getElementById('batch_days').value) || 1;
+  const customKg  = parseFloat(document.getElementById('batch_custom_kg').value) || 0;
+
+  const allFeeds = [
+    ...rougFeeds.map(f => ({ ...f, type: 'আঁশ (Roughage)' })),
+    ...concFeeds.map(f => ({ ...f, type: 'কনসেন্ট্রেট' }))
+  ];
+
+  if (allFeeds.length === 0) {
+    document.getElementById('batch-result').innerHTML =
+      '<div class="info-box">⚠️ প্রথমে রেশনে খাদ্য উপাদান যোগ করুন।</div>';
+    return;
+  }
+
+  // Total fresh per animal per day
+  const totalFreshPerAnimalDay = allFeeds.reduce((s, f) => s + f.qty, 0);
+  if (totalFreshPerAnimalDay <= 0) {
+    document.getElementById('batch-result').innerHTML =
+      '<div class="info-box">⚠️ রেশনে কোনো পরিমাণ দেওয়া নেই।</div>';
+    return;
+  }
+
+  // Determine multiplier
+  let multiplier, batchLabel, batchSubLabel;
+  if (customKg > 0) {
+    multiplier = customKg / totalFreshPerAnimalDay;
+    batchLabel = `${customKg.toFixed(0)} কেজি তাজা খাদ্যের জন্য`;
+    batchSubLabel = `(${(multiplier).toFixed(2)} গাভী-দিন সমতুল্য)`;
+  } else {
+    multiplier = animals * days;
+    batchLabel = `${animals} টি গাভী × ${days} দিন`;
+    batchSubLabel = `মোট তাজা খাদ্য: ${(totalFreshPerAnimalDay * multiplier).toFixed(1)} কেজি`;
+  }
+
+  // Build rows
+  let rowsHtml = '';
+  let grandFresh = 0, grandDM = 0, grandNEL = 0, grandCP = 0, grandNDF = 0, grandCa = 0, grandP = 0;
+
+  allFeeds.forEach(f => {
+    const batchFresh = f.qty * multiplier;
+    const batchDM    = batchFresh * f.dm / 100;
+    const batchNEL   = batchDM * f.nel;
+    const batchCP    = batchDM * f.cp / 100;
+    const batchNDF   = batchDM * f.ndf / 100;
+    const batchCa    = batchDM * f.ca / 100 * 1000;
+    const batchP     = batchDM * f.p / 100 * 1000;
+
+    grandFresh += batchFresh; grandDM += batchDM; grandNEL += batchNEL;
+    grandCP += batchCP; grandNDF += batchNDF; grandCa += batchCa; grandP += batchP;
+
+    rowsHtml += `<tr>
+      <td>
+        <span class="feed-name" style="font-size:0.76rem;">${f.bn}</span>
+        <span class="feed-name-en" style="font-size:0.6rem;">${f.type}</span>
+      </td>
+      <td style="font-family:'IBM Plex Mono';font-size:0.74rem;color:var(--accent);font-weight:700;">${batchFresh.toFixed(1)}</td>
+      <td style="font-family:'IBM Plex Mono';font-size:0.74rem;">${batchDM.toFixed(1)}</td>
+      <td style="font-family:'IBM Plex Mono';font-size:0.74rem;color:var(--col-nel);">${batchNEL.toFixed(1)}</td>
+      <td style="font-family:'IBM Plex Mono';font-size:0.74rem;color:var(--col-cp);">${(batchCP * 1000).toFixed(0)} g<br><span style="font-size:0.6rem;color:var(--text2);">${batchCP.toFixed(2)} kg</span></td>
+      <td style="font-family:'IBM Plex Mono';font-size:0.74rem;color:var(--col-ndf);">${(batchNDF * 1000).toFixed(0)} g<br><span style="font-size:0.6rem;color:var(--text2);">${batchNDF.toFixed(2)} kg</span></td>
+      <td style="font-family:'IBM Plex Mono';font-size:0.74rem;color:var(--col-ca);">${batchCa.toFixed(0)} g</td>
+      <td style="font-family:'IBM Plex Mono';font-size:0.74rem;color:var(--col-p);">${batchP.toFixed(0)} g</td>
+    </tr>`;
+  });
+
+  const html = `
+    <div class="section-title" style="margin-top:14px;">📦 ${batchLabel} <span style="font-weight:400;font-size:0.68rem;">${batchSubLabel}</span></div>
+    <div class="feed-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>খাদ্য উপাদান</th>
+          <th>তাজা (কেজি)</th>
+          <th>DM (কেজি)</th>
+          <th>NEL (Mcal)</th>
+          <th>CP</th>
+          <th>NDF</th>
+          <th>Ca (গ্রাম)</th>
+          <th>P (গ্রাম)</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+      <tfoot>
+        <tr class="total-row">
+          <td><b>মোট (Total)</b></td>
+          <td style="font-size:1rem;font-weight:800;color:var(--accent);font-family:'IBM Plex Mono';">${grandFresh.toFixed(1)} কেজি</td>
+          <td style="font-family:'IBM Plex Mono';font-weight:700;">${grandDM.toFixed(1)}</td>
+          <td style="font-family:'IBM Plex Mono';font-weight:700;color:var(--col-nel);">${grandNEL.toFixed(1)}</td>
+          <td style="font-family:'IBM Plex Mono';font-weight:700;color:var(--col-cp);">${(grandCP * 1000).toFixed(0)} g<br>${grandCP.toFixed(2)} kg</td>
+          <td style="font-family:'IBM Plex Mono';font-weight:700;color:var(--col-ndf);">${(grandNDF * 1000).toFixed(0)} g<br>${grandNDF.toFixed(2)} kg</td>
+          <td style="font-family:'IBM Plex Mono';font-weight:700;color:var(--col-ca);">${grandCa.toFixed(0)} g</td>
+          <td style="font-family:'IBM Plex Mono';font-weight:700;color:var(--col-p);">${grandP.toFixed(0)} g</td>
+        </tr>
+      </tfoot>
+    </table>
+    </div>
+    <div class="info-box" style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+      <div><span style="font-size:0.65rem;color:var(--text2);">মোট তাজা খাদ্য</span><br><b style="font-size:1rem;color:var(--accent);">${grandFresh.toFixed(1)} কেজি</b></div>
+      <div><span style="font-size:0.65rem;color:var(--text2);">মোট শুকনো পদার্থ (DM)</span><br><b style="font-size:1rem;">${grandDM.toFixed(1)} কেজি</b></div>
+      <div><span style="font-size:0.65rem;color:var(--text2);">মোট NEL</span><br><b style="font-size:1rem;color:var(--col-nel);">${grandNEL.toFixed(1)} Mcal</b></div>
+      <div><span style="font-size:0.65rem;color:var(--text2);">মোট ক্রুড প্রোটিন (CP)</span><br><b style="font-size:1rem;color:var(--col-cp);">${grandCP.toFixed(2)} কেজি</b></div>
+      <div><span style="font-size:0.65rem;color:var(--text2);">মোট NDF</span><br><b style="font-size:1rem;color:var(--col-ndf);">${grandNDF.toFixed(2)} কেজি</b></div>
+      <div><span style="font-size:0.65rem;color:var(--text2);">মোট ক্যালসিয়াম (Ca)</span><br><b style="font-size:1rem;color:var(--col-ca);">${grandCa.toFixed(0)} গ্রাম</b></div>
+      <div><span style="font-size:0.65rem;color:var(--text2);">মোট ফসফরাস (P)</span><br><b style="font-size:1rem;color:var(--col-p);">${grandP.toFixed(0)} গ্রাম</b></div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+      <div class="info-box" style="flex:1;min-width:180px;padding:10px;">
+        <b style="color:var(--accent2);">DM ভিত্তিক পুষ্টিমান (Nutrient Density)</b><br>
+        NEL: ${grandDM > 0 ? (grandNEL / grandDM).toFixed(2) : '—'} Mcal/kg DM<br>
+        CP: ${grandDM > 0 ? (grandCP / grandDM * 100).toFixed(1) : '—'}% DM<br>
+        NDF: ${grandDM > 0 ? (grandNDF / grandDM * 100).toFixed(1) : '—'}% DM<br>
+        Ca: ${grandDM > 0 ? (grandCa / grandDM / 10).toFixed(3) : '—'}% DM<br>
+        P: ${grandDM > 0 ? (grandP / grandDM / 10).toFixed(3) : '—'}% DM<br>
+        Ca:P অনুপাত: ${grandP > 0 ? (grandCa / grandP).toFixed(2) : '—'}:১
+      </div>
+    </div>
+
+    <!-- ===== PDF DOWNLOAD SECTION ===== -->
+    <div id="batch-pdf-banner" style="
+      margin-top: 22px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #0d9e67 0%, #1a5fb4 60%, #7c3aed 100%);
+      padding: 20px 22px 18px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(13,158,103,0.25);
+    ">
+      <!-- Decorative circles -->
+      <div style="position:absolute;top:-28px;right:-28px;width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,0.08);pointer-events:none;"></div>
+      <div style="position:absolute;bottom:-20px;left:60px;width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none;"></div>
+
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="font-size:1.5rem;">📄</span>
+            <span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.02rem;color:#ffffff;letter-spacing:0.3px;">রেশন রিপোর্ট ডাউনলোড করুন</span>
+          </div>
+          <div style="font-size:0.72rem;color:rgba(255,255,255,0.82);font-family:'Noto Sans Bengali',sans-serif;line-height:1.6;">
+            🌿 সম্পূর্ণ ব্যাচ রেশন রিপোর্ট — খাদ্য তালিকা, পুষ্টিমান ও সারসংক্ষেপ সহ<br>
+            <span style="color:#a7f3d0;">PDF ফরম্যাটে সংরক্ষণ করুন — প্রিন্ট ও শেয়ারযোগ্য</span>
+          </div>
+        </div>
+        <button id="batch-pdf-btn" onclick="downloadBatchPDF()" style="
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          background: #ffffff;
+          color: #0d9e67;
+          border: none;
+          border-radius: 12px;
+          padding: 12px 22px;
+          font-family: 'Noto Sans Bengali', sans-serif;
+          font-weight: 700;
+          font-size: 0.88rem;
+          cursor: pointer;
+          box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+          transition: transform 0.15s, box-shadow 0.15s;
+          white-space: nowrap;
+          flex-shrink: 0;
+        "
+        onmouseover="this.style.transform='scale(1.04)';this.style.boxShadow='0 8px 28px rgba(0,0,0,0.22)';"
+        onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 18px rgba(0,0,0,0.18)';">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0d9e67" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          PDF ডাউনলোড
+        </button>
+      </div>
+
+      <!-- Badges -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
+        <span style="background:rgba(255,255,255,0.15);border-radius:20px;padding:3px 12px;font-size:0.63rem;color:#ffffff;font-family:'Space Grotesk',sans-serif;">✅ NRC 2021 ভিত্তিক</span>
+        <span style="background:rgba(255,255,255,0.15);border-radius:20px;padding:3px 12px;font-size:0.63rem;color:#ffffff;font-family:'Space Grotesk',sans-serif;">🐄 ডেইরি গাভী রেশন</span>
+        <span style="background:rgba(255,255,255,0.15);border-radius:20px;padding:3px 12px;font-size:0.63rem;color:#ffffff;font-family:'Space Grotesk',sans-serif;">📊 সম্পূর্ণ পুষ্টি বিশ্লেষণ</span>
+        <span style="background:rgba(255,255,255,0.15);border-radius:20px;padding:3px 12px;font-size:0.63rem;color:#ffffff;font-family:'Space Grotesk',sans-serif;">🖨 প্রিন্টযোগ্য</span>
+      </div>
+    </div>
+    <!-- ===== END PDF DOWNLOAD SECTION ===== -->
+  `;
+
+  document.getElementById('batch-result').innerHTML = html;
+}
+
+// ======================================================
+// BATCH PDF DOWNLOAD
+// ======================================================
+async function downloadBatchPDF() {
+  const btn = document.getElementById('batch-pdf-btn');
+  if (!btn) return;
+
+  const svgDownload = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0d9e67" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+  const svgSpin = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0d9e67" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`;
+
+  btn.innerHTML = svgSpin + ' Generating...';
+  btn.disabled = true;
+
+  try {
+    const { jsPDF } = window.jspdf;
+
+    // ---- Collect live data (English labels only, numbers) ----
+    const animals  = parseFloat(document.getElementById('batch_animals').value) || 1;
+    const days     = parseFloat(document.getElementById('batch_days').value) || 1;
+    const customKg = parseFloat(document.getElementById('batch_custom_kg').value) || 0;
+    const allFeeds = [
+      ...rougFeeds.map(f => ({ ...f, type: 'Roughage' })),
+      ...concFeeds.map(f => ({ ...f, type: 'Concentrate' }))
+    ];
+    const totalFreshPerAnimalDay = allFeeds.reduce((s,f) => s + f.qty, 0);
+    let multiplier, batchLabel, batchSubLabel;
+    if (customKg > 0) {
+      multiplier    = customKg / totalFreshPerAnimalDay;
+      batchLabel    = customKg.toFixed(0) + ' kg Fresh Feed';
+      batchSubLabel = '(' + multiplier.toFixed(2) + ' cow-days equivalent)';
+    } else {
+      multiplier    = animals * days;
+      batchLabel    = animals + ' Cows x ' + days + ' Days';
+      batchSubLabel = 'Total fresh: ' + (totalFreshPerAnimalDay * multiplier).toFixed(1) + ' kg';
+    }
+    let grandFresh=0, grandDM=0, grandNEL=0, grandCP=0, grandNDF=0, grandCa=0, grandP=0;
+    const rows = allFeeds.map(f => {
+      const bF=f.qty*multiplier, bDM=bF*f.dm/100, bNEL=bDM*f.nel;
+      const bCP=bDM*f.cp/100, bNDF=bDM*f.ndf/100, bCa=bDM*f.ca/100*1000, bP=bDM*f.p/100*1000;
+      grandFresh+=bF; grandDM+=bDM; grandNEL+=bNEL; grandCP+=bCP; grandNDF+=bNDF; grandCa+=bCa; grandP+=bP;
+      // Extract English name from Bengali field's parentheses e.g. "ভুট্টা সাইলেজ (Corn Silage)"
+      const bnFull = f.bn || '';
+      const parenMatch = bnFull.match(/\(([^)]+)\)/);
+      const engName = parenMatch ? parenMatch[1] : '';
+      const bnName  = bnFull.replace(/\s*\([^)]*\)\s*/g, '').trim() || bnFull;
+      return { bnName, engName, type: f.type, bF, bDM, bNEL, bCP, bNDF, bCa, bP };
+    });
+    // ---- Roughage vs Concentrate subtotals ----
+    let rFresh=0,rDM=0,rNEL=0,rCP=0,rNDF=0,rCa=0,rP=0;
+    let cFresh=0,cDM=0,cNEL=0,cCP=0,cNDF=0,cCa=0,cP=0;
+    rows.forEach(r => {
+      if (r.type === 'Roughage') {
+        rFresh+=r.bF; rDM+=r.bDM; rNEL+=r.bNEL; rCP+=r.bCP; rNDF+=r.bNDF; rCa+=r.bCa; rP+=r.bP;
+      } else {
+        cFresh+=r.bF; cDM+=r.bDM; cNEL+=r.bNEL; cCP+=r.bCP; cNDF+=r.bNDF; cCa+=r.bCa; cP+=r.bP;
+      }
+    });
+    // Percentages of grand total
+    const pct = (v, g) => g > 0 ? (v/g*100).toFixed(1)+'%' : '—';
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'});
+    const densNEL  = grandDM > 0 ? (grandNEL/grandDM).toFixed(2)        : '—';
+    const densCP   = grandDM > 0 ? (grandCP/grandDM*100).toFixed(1)     : '—';
+    const densNDF  = grandDM > 0 ? (grandNDF/grandDM*100).toFixed(1)    : '—';
+    const densCa   = grandDM > 0 ? (grandCa/grandDM/10).toFixed(3)      : '—';
+    const densP    = grandDM > 0 ? (grandP/grandDM/10).toFixed(3)       : '—';
+    const densRat  = grandP  > 0 ? (grandCa/grandP).toFixed(2)          : '—';
+
+    // ---- Build an offscreen HTML div in English ----
+    const printDiv = document.createElement('div');
+    printDiv.style.cssText = [
+      'position:fixed', 'left:-9999px', 'top:0',
+      'width:794px',   // ~A4 at 96dpi
+      'background:#ffffff',
+      'font-family:Arial,Helvetica,sans-serif',
+      'color:#1a2624',
+      'padding:0',
+      'box-sizing:border-box'
+    ].join(';');
+
+    // ---- Row HTML ----
+    let rowsHtml = '';
+    rows.forEach((r, idx) => {
+      const bg = idx % 2 === 0 ? '#f5fbf8' : '#ffffff';
+      const typeColor = r.type === 'Roughage' ? '#16a34a' : '#7c3aed';
+      rowsHtml += `<tr style="background:${bg};">
+        <td style="padding:5px 6px;border-bottom:1px solid #c8e0d4;">
+          <div style="font-weight:700;font-size:11px;color:#1a2624;">${r.bnName}</div>
+          ${r.engName ? `<div style="font-size:9px;color:#4a6b5e;margin-top:1px;">${r.engName}</div>` : ''}
+        </td>
+        <td style="padding:5px 6px;border-bottom:1px solid #c8e0d4;color:${typeColor};font-size:10px;">${r.type}</td>
+        <td style="padding:5px 6px;border-bottom:1px solid #c8e0d4;text-align:right;color:#0d9e67;font-weight:700;font-size:11px;">${r.bF.toFixed(1)}</td>
+        <td style="padding:5px 6px;border-bottom:1px solid #c8e0d4;text-align:right;font-size:11px;">${r.bDM.toFixed(1)}</td>
+        <td style="padding:5px 6px;border-bottom:1px solid #c8e0d4;text-align:right;color:#d97706;font-size:11px;">${r.bNEL.toFixed(1)}</td>
+        <td style="padding:5px 6px;border-bottom:1px solid #c8e0d4;text-align:right;color:#7c3aed;font-size:11px;">${(r.bCP*1000).toFixed(0)}</td>
+        <td style="padding:5px 6px;border-bottom:1px solid #c8e0d4;text-align:right;color:#16a34a;font-size:11px;">${(r.bNDF*1000).toFixed(0)}</td>
+        <td style="padding:5px 6px;border-bottom:1px solid #c8e0d4;text-align:right;color:#059669;font-size:11px;">${r.bCa.toFixed(0)}</td>
+        <td style="padding:5px 6px;border-bottom:1px solid #c8e0d4;text-align:right;color:#ea580c;font-size:11px;">${r.bP.toFixed(0)}</td>
+      </tr>`;
+    });
+
+    // ---- Summary cards ----
+    const summCards = [
+      { label:'Total Fresh Feed',      value: grandFresh.toFixed(1)+' kg',    color:'#0d9e67', bg:'#e8f5ee' },
+      { label:'Dry Matter (DM)',        value: grandDM.toFixed(1)+' kg',       color:'#1a5fb4', bg:'#e8f0ff' },
+      { label:'Net Energy (NEL)',       value: grandNEL.toFixed(1)+' Mcal',    color:'#d97706', bg:'#fff7e6' },
+      { label:'Crude Protein (CP)',     value: grandCP.toFixed(2)+' kg',       color:'#7c3aed', bg:'#f3eeff' },
+      { label:'NDF (Fiber)',            value: grandNDF.toFixed(2)+' kg',      color:'#16a34a', bg:'#e8f5ee' },
+      { label:'Calcium (Ca)',           value: grandCa.toFixed(0)+' g',        color:'#059669', bg:'#e6fdf4' },
+      { label:'Phosphorus (P)',         value: grandP.toFixed(0)+' g',         color:'#ea580c', bg:'#fff3ee' },
+    ];
+    let summCardsHtml = summCards.map(c => `
+      <div style="flex:1;min-width:90px;border-radius:10px;background:${c.bg};border:1.5px solid ${c.color}33;padding:10px 12px;">
+        <div style="font-size:9px;color:#4a6b5e;margin-bottom:3px;">${c.label}</div>
+        <div style="font-size:15px;font-weight:800;color:${c.color};">${c.value}</div>
+      </div>`).join('');
+
+    // ---- Density items ----
+    const densItems = [
+      { label:'NEL Density',  value: densNEL,  unit:'Mcal/kg DM', color:'#d97706' },
+      { label:'CP%',          value: densCP,   unit:'% DM',       color:'#7c3aed' },
+      { label:'NDF%',         value: densNDF,  unit:'% DM',       color:'#16a34a' },
+      { label:'Ca%',          value: densCa,   unit:'% DM',       color:'#059669' },
+      { label:'P%',           value: densP,    unit:'% DM',       color:'#ea580c' },
+      { label:'Ca:P Ratio',   value: densRat,  unit:':1',         color:'#1a5fb4' },
+    ];
+    let densHtml = densItems.map(d => `
+      <div style="flex:1;text-align:center;padding:8px 4px;">
+        <div style="font-size:9px;color:#4a6b5e;margin-bottom:2px;">${d.label}</div>
+        <div style="font-size:14px;font-weight:800;color:${d.color};">${d.value}</div>
+        <div style="font-size:8px;color:#8aaa98;">${d.unit}</div>
+      </div>`).join('');
+
+    printDiv.innerHTML = `
+      <!-- HEADER -->
+      <div style="background:linear-gradient(135deg,#0d9e67 0%,#1a5fb4 70%,#7c3aed 100%);padding:20px 28px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="background:#fff;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#0d9e67;font-size:12px;">NRC</div>
+            <div>
+              <div style="color:#fff;font-size:18px;font-weight:800;letter-spacing:0.5px;">Dairy Batch Ration Report</div>
+              <div style="color:rgba(255,255,255,0.8);font-size:10px;margin-top:2px;">NRC 2021 (8th Ed.) | ILST Gaibandha | Dept. of Livestock Services</div>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:right;color:rgba(255,255,255,0.88);font-size:10px;line-height:1.8;">
+          <div style="font-weight:700;color:#fff;">MD Akramul Haque, BCS (Livestock)</div>
+          <div>Lecturer, ILST Gaibandha</div>
+          <div>01701057143</div>
+          <div>${dateStr}</div>
+        </div>
+      </div>
+
+      <!-- BATCH PILLS -->
+      <div style="display:flex;gap:10px;padding:14px 20px;background:#f0f7f4;">
+        <div style="flex:1;border-radius:8px;background:#fff;border:1.5px solid #0d9e6744;padding:8px 14px;">
+          <div style="font-size:9px;color:#4a6b5e;">Batch</div>
+          <div style="font-size:13px;font-weight:700;color:#0d9e67;">${batchLabel}</div>
+        </div>
+        <div style="flex:1;border-radius:8px;background:#fff;border:1.5px solid #1a5fb444;padding:8px 14px;">
+          <div style="font-size:9px;color:#4a6b5e;">Note</div>
+          <div style="font-size:13px;font-weight:700;color:#1a5fb4;">${batchSubLabel}</div>
+        </div>
+        <div style="flex:1;border-radius:8px;background:#fff;border:1.5px solid #0d9e6744;padding:8px 14px;">
+          <div style="font-size:9px;color:#4a6b5e;">Total Fresh Feed</div>
+          <div style="font-size:13px;font-weight:700;color:#0d9e67;">${grandFresh.toFixed(1)} kg</div>
+        </div>
+      </div>
+
+      <!-- TABLE SECTION TITLE -->
+      <div style="padding:8px 20px 4px;background:#e8f5ee;font-size:11px;font-weight:700;color:#0d9e67;letter-spacing:0.3px;">
+        📋 Feed Ingredient Breakdown
+      </div>
+
+      <!-- FEED TABLE -->
+      <div style="padding:0 20px 12px;">
+        <table style="width:100%;border-collapse:collapse;margin-top:4px;">
+          <thead>
+            <tr style="background:#1a2624;">
+              <th style="padding:7px 6px;text-align:left;font-size:10px;color:#fff;font-weight:700;">Feed Ingredient</th>
+              <th style="padding:7px 6px;text-align:left;font-size:10px;color:#fff;font-weight:700;">Type</th>
+              <th style="padding:7px 6px;text-align:right;font-size:10px;color:#fff;font-weight:700;">Fresh (kg)</th>
+              <th style="padding:7px 6px;text-align:right;font-size:10px;color:#fff;font-weight:700;">DM (kg)</th>
+              <th style="padding:7px 6px;text-align:right;font-size:10px;color:#fff;font-weight:700;">NEL (Mcal)</th>
+              <th style="padding:7px 6px;text-align:right;font-size:10px;color:#fff;font-weight:700;">CP (g)</th>
+              <th style="padding:7px 6px;text-align:right;font-size:10px;color:#fff;font-weight:700;">NDF (g)</th>
+              <th style="padding:7px 6px;text-align:right;font-size:10px;color:#fff;font-weight:700;">Ca (g)</th>
+              <th style="padding:7px 6px;text-align:right;font-size:10px;color:#fff;font-weight:700;">P (g)</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+          <tfoot>
+            <tr style="background:#0d9e67;">
+              <td colspan="2" style="padding:7px 6px;font-weight:800;color:#fff;font-size:12px;">TOTAL</td>
+              <td style="padding:7px 6px;text-align:right;color:#fde68a;font-weight:800;font-size:12px;">${grandFresh.toFixed(1)} kg</td>
+              <td style="padding:7px 6px;text-align:right;color:#fff;font-weight:700;font-size:11px;">${grandDM.toFixed(1)}</td>
+              <td style="padding:7px 6px;text-align:right;color:#fff;font-weight:700;font-size:11px;">${grandNEL.toFixed(1)}</td>
+              <td style="padding:7px 6px;text-align:right;color:#fff;font-weight:700;font-size:11px;">${(grandCP*1000).toFixed(0)}</td>
+              <td style="padding:7px 6px;text-align:right;color:#fff;font-weight:700;font-size:11px;">${(grandNDF*1000).toFixed(0)}</td>
+              <td style="padding:7px 6px;text-align:right;color:#fff;font-weight:700;font-size:11px;">${grandCa.toFixed(0)}</td>
+              <td style="padding:7px 6px;text-align:right;color:#fff;font-weight:700;font-size:11px;">${grandP.toFixed(0)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- ROUGHAGE vs CONCENTRATE SECTION -->
+      <div style="padding:8px 20px 4px;background:linear-gradient(90deg,#e8f5ee,#f3eeff);font-size:11px;font-weight:700;color:#1a2624;border-left:4px solid #0d9e67;">
+        🌾 Roughage vs Concentrate — Nutrient Contribution
+      </div>
+
+      <div style="padding:12px 20px 4px;">
+
+        <!-- Roughage Row -->
+        <div style="background:#f0fdf4;border-radius:10px;border:1.5px solid #16a34a44;padding:10px 14px;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="background:#16a34a;color:#fff;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;">🌿 Roughage (আঁশজাতীয়)</div>
+            <div style="font-size:10px;color:#16a34a;font-weight:600;">Fresh: ${rFresh.toFixed(1)} kg &nbsp;|&nbsp; DM: ${rDM.toFixed(1)} kg</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:80px;background:#fff;border-radius:8px;border:1px solid #16a34a22;padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:#4a6b5e;">Fresh Feed</div>
+              <div style="font-size:13px;font-weight:800;color:#16a34a;">${rFresh.toFixed(1)} kg</div>
+              <div style="font-size:9px;color:#8aaa98;">${pct(rFresh,grandFresh)} of total</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:#fff;border-radius:8px;border:1px solid #16a34a22;padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:#4a6b5e;">NEL</div>
+              <div style="font-size:13px;font-weight:800;color:#d97706;">${rNEL.toFixed(1)} Mcal</div>
+              <div style="font-size:9px;color:#8aaa98;">${pct(rNEL,grandNEL)} of total</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:#fff;border-radius:8px;border:1px solid #16a34a22;padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:#4a6b5e;">Crude Protein</div>
+              <div style="font-size:13px;font-weight:800;color:#7c3aed;">${(rCP*1000).toFixed(0)} g</div>
+              <div style="font-size:9px;color:#8aaa98;">${pct(rCP,grandCP)} of total</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:#fff;border-radius:8px;border:1px solid #16a34a22;padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:#4a6b5e;">NDF (Fiber)</div>
+              <div style="font-size:13px;font-weight:800;color:#16a34a;">${(rNDF*1000).toFixed(0)} g</div>
+              <div style="font-size:9px;color:#8aaa98;">${pct(rNDF,grandNDF)} of total</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:#fff;border-radius:8px;border:1px solid #16a34a22;padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:#4a6b5e;">Calcium</div>
+              <div style="font-size:13px;font-weight:800;color:#059669;">${rCa.toFixed(0)} g</div>
+              <div style="font-size:9px;color:#8aaa98;">${pct(rCa,grandCa)} of total</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:#fff;border-radius:8px;border:1px solid #16a34a22;padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:#4a6b5e;">Phosphorus</div>
+              <div style="font-size:13px;font-weight:800;color:#ea580c;">${rP.toFixed(0)} g</div>
+              <div style="font-size:9px;color:#8aaa98;">${pct(rP,grandP)} of total</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Concentrate Row -->
+        <div style="background:#faf5ff;border-radius:10px;border:1.5px solid #7c3aed44;padding:10px 14px;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="background:#7c3aed;color:#fff;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;">⚙️ Concentrate (কনসেন্ট্রেট)</div>
+            <div style="font-size:10px;color:#7c3aed;font-weight:600;">Fresh: ${cFresh.toFixed(1)} kg &nbsp;|&nbsp; DM: ${cDM.toFixed(1)} kg</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:80px;background:#fff;border-radius:8px;border:1px solid #7c3aed22;padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:#4a6b5e;">Fresh Feed</div>
+              <div style="font-size:13px;font-weight:800;color:#7c3aed;">${cFresh.toFixed(1)} kg</div>
+              <div style="font-size:9px;color:#8aaa98;">${pct(cFresh,grandFresh)} of total</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:#fff;border-radius:8px;border:1px solid #7c3aed22;padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:#4a6b5e;">NEL</div>
+              <div style="font-size:13px;font-weight:800;color:#d97706;">${cNEL.toFixed(1)} Mcal</div>
+              <div style="font-size:9px;color:#8aaa98;">${pct(cNEL,grandNEL)} of total</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:#fff;border-radius:8px;border:1px solid #7c3aed22;padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:#4a6b5e;">Crude Protein</div>
+              <div style="font-size:13px;font-weight:800;color:#7c3aed;">${(cCP*1000).toFixed(0)} g</div>
+              <div style="font-size:9px;color:#8aaa98;">${pct(cCP,grandCP)} of total</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:#fff;border-radius:8px;border:1px solid #7c3aed22;padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:#4a6b5e;">NDF (Fiber)</div>
+              <div style="font-size:13px;font-weight:800;color:#16a34a;">${(cNDF*1000).toFixed(0)} g</div>
+              <div style="font-size:9px;color:#8aaa98;">${pct(cNDF,grandNDF)} of total</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:#fff;border-radius:8px;border:1px solid #7c3aed22;padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:#4a6b5e;">Calcium</div>
+              <div style="font-size:13px;font-weight:800;color:#059669;">${cCa.toFixed(0)} g</div>
+              <div style="font-size:9px;color:#8aaa98;">${pct(cCa,grandCa)} of total</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:#fff;border-radius:8px;border:1px solid #7c3aed22;padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:#4a6b5e;">Phosphorus</div>
+              <div style="font-size:13px;font-weight:800;color:#ea580c;">${cP.toFixed(0)} g</div>
+              <div style="font-size:9px;color:#8aaa98;">${pct(cP,grandP)} of total</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grand Total Row -->
+        <div style="background:linear-gradient(135deg,#1a2624,#0d3d2a);border-radius:10px;padding:10px 14px;margin-bottom:4px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="background:#fde68a;color:#1a2624;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;">🏆 GRAND TOTAL (Roughage + Concentrate)</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:80px;background:rgba(255,255,255,0.1);border-radius:8px;border:1px solid rgba(255,255,255,0.15);padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:rgba(255,255,255,0.6);">Total Fresh</div>
+              <div style="font-size:13px;font-weight:800;color:#fde68a;">${grandFresh.toFixed(1)} kg</div>
+              <div style="font-size:9px;color:rgba(255,255,255,0.45);">100%</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:rgba(255,255,255,0.1);border-radius:8px;border:1px solid rgba(255,255,255,0.15);padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:rgba(255,255,255,0.6);">Total NEL</div>
+              <div style="font-size:13px;font-weight:800;color:#fcd34d;">${grandNEL.toFixed(1)} Mcal</div>
+              <div style="font-size:9px;color:rgba(255,255,255,0.45);">100%</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:rgba(255,255,255,0.1);border-radius:8px;border:1px solid rgba(255,255,255,0.15);padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:rgba(255,255,255,0.6);">Total CP</div>
+              <div style="font-size:13px;font-weight:800;color:#c4b5fd;">${(grandCP*1000).toFixed(0)} g</div>
+              <div style="font-size:9px;color:rgba(255,255,255,0.45);">100%</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:rgba(255,255,255,0.1);border-radius:8px;border:1px solid rgba(255,255,255,0.15);padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:rgba(255,255,255,0.6);">Total NDF</div>
+              <div style="font-size:13px;font-weight:800;color:#86efac;">${(grandNDF*1000).toFixed(0)} g</div>
+              <div style="font-size:9px;color:rgba(255,255,255,0.45);">100%</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:rgba(255,255,255,0.1);border-radius:8px;border:1px solid rgba(255,255,255,0.15);padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:rgba(255,255,255,0.6);">Total Ca</div>
+              <div style="font-size:13px;font-weight:800;color:#6ee7b7;">${grandCa.toFixed(0)} g</div>
+              <div style="font-size:9px;color:rgba(255,255,255,0.45);">100%</div>
+            </div>
+            <div style="flex:1;min-width:80px;background:rgba(255,255,255,0.1);border-radius:8px;border:1px solid rgba(255,255,255,0.15);padding:7px 10px;text-align:center;">
+              <div style="font-size:8px;color:rgba(255,255,255,0.6);">Total P</div>
+              <div style="font-size:13px;font-weight:800;color:#fdba74;">${grandP.toFixed(0)} g</div>
+              <div style="font-size:9px;color:rgba(255,255,255,0.45);">100%</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- NUTRIENT SUMMARY TITLE -->
+      <div style="padding:8px 20px 4px;background:#e8f5ee;font-size:11px;font-weight:700;color:#0d9e67;">
+        📊 Nutrient Summary
+      </div>
+
+      <!-- SUMMARY CARDS -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;padding:12px 20px;">
+        ${summCardsHtml}
+      </div>
+
+      <!-- DENSITY TITLE -->
+      <div style="padding:8px 20px 4px;background:#e8f0ff;font-size:11px;font-weight:700;color:#1a5fb4;">
+        🔬 DM-Based Nutrient Density
+      </div>
+
+      <!-- DENSITY ROW -->
+      <div style="display:flex;gap:0;padding:10px 20px 16px;border-bottom:2px solid #e0eee6;">
+        ${densHtml}
+      </div>
+
+      <!-- FOOTER -->
+      <div style="background:#1a2624;padding:10px 20px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="color:rgba(255,255,255,0.7);font-size:9px;">
+          Generated by NRC 2021 Dairy Ration Calculator | ILST Gaibandha
+        </div>
+        <div style="color:#0d9e67;font-size:9px;font-weight:600;">
+          dairy_batch_ration_${now.toISOString().slice(0,10)}.pdf
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(printDiv);
+
+    // ---- Capture with html2canvas ----
+    const canvas = await html2canvas(printDiv, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+    document.body.removeChild(printDiv);
+
+    // ---- Build PDF from canvas image ----
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const pageW = 210, pageH = 297;
+    const margin = 0;
+    const imgW = pageW;
+    const imgH = (canvas.height / canvas.width) * imgW;
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    if (imgH <= pageH) {
+      doc.addImage(imgData, 'JPEG', 0, 0, imgW, imgH);
+    } else {
+      // multi-page: slice the canvas
+      const pxPerMm = canvas.width / pageW;
+      const pageHeightPx = pageH * pxPerMm;
+      let sliceTop = 0;
+      let pageNum = 0;
+      while (sliceTop < canvas.height) {
+        if (pageNum > 0) doc.addPage();
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = Math.min(pageHeightPx, canvas.height - sliceTop);
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.drawImage(canvas, 0, -sliceTop);
+        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.95);
+        const sliceH = (sliceCanvas.height / canvas.width) * imgW;
+        doc.addImage(sliceData, 'JPEG', 0, 0, imgW, sliceH);
+        sliceTop += pageHeightPx;
+        pageNum++;
+      }
+    }
+
+    doc.save('dairy_batch_ration_' + now.toISOString().slice(0,10) + '.pdf');
+
+  } catch(err) {
+    console.error('PDF error:', err);
+    alert('PDF generation failed. Please try again.');
+  }
+
+  btn.innerHTML = svgDownload + ' PDF Download';
+  btn.disabled = false;
+}
+
+// spin keyframe for loading icon
+(function() {
+  if (!document.getElementById('spin-style')) {
+    const s = document.createElement('style');
+    s.id = 'spin-style';
+    s.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+    document.head.appendChild(s);
+  }
+})();
+
 </script>
 
 <!-- ===== DEVELOPER SECTION ===== -->
@@ -2063,7 +2904,7 @@ initDefaultRation();
 
     <div class="dev-info">
       <h3>MD AKRAMUL HAQUE</h3>
-      <div class="dev-title">BCS (Livestock) </div>
+      <div class="dev-title">BCS (Livestock) · Veterinary Surgeon</div>
       <div class="dev-tags">
         <span class="dev-tag">ILST Gaibandha</span>
         <span class="dev-tag blue">Dept. of Livestock Services (DLS)</span>
@@ -2102,7 +2943,7 @@ initDefaultRation();
 
   <div class="dev-footer">
     <span class="dev-copy">
-      © 2025 MD Akramul Haque, BCS (Livestock) · ILST, Gaibandha · Department of Livestock Services, Bangladesh
+      © 2026 MD Akramul Haque, BCS (Livestock) · ILST, Gaibandha · Department of Livestock Services, Bangladesh
     </span>
     <span class="version-badge">📊 NRC 2021 · Dairy Ration Calculator v2.0</span>
   </div>
